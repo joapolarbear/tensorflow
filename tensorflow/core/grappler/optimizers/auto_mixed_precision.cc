@@ -935,7 +935,7 @@ class AutoMixedPrecisionImpl {
       const absl::flat_hash_map<string, TypeAttrId>& write_ops,
       const absl::flat_hash_map<string, TypeAttrId>& read_ops,
       DataStructureOpsMap* object_clients_map) const;
-  void AddWhitelistOps(absl::flat_hash_set<int>* white_set) const;
+  void AddWhitelistOps(absl::flat_hash_set<int>* white_set, absl::flat_hash_set<int>* prior_set) const;
   void PropagateBlackFwdThroughClearAndGray(
       absl::flat_hash_set<int>* black_set) const;
   void ForceColorMatchBetweenDataStructureOps(
@@ -965,6 +965,7 @@ class AutoMixedPrecisionImpl {
   gtl::FlatSet<string> fp16_blacklist_;
   gtl::FlatSet<string> fp16_graylist_;
   gtl::FlatSet<string> fp16_clearlist_;
+  gtl::FlatSet<string> fp16_priorlist_;
   absl::flat_hash_set<const NodeDef*> should_process_nodes_;
 };
 
@@ -1152,6 +1153,8 @@ Status AutoMixedPrecisionImpl::Optimize() {
   fp16_blacklist_ = AutoMixedPrecisionLists::BlackList();
   fp16_graylist_ = AutoMixedPrecisionLists::GrayList();
   fp16_clearlist_ = AutoMixedPrecisionLists::ClearList();
+  fp16_priorlist_ = AutoMixedPrecisionLists::PriorList();
+  // no need to check priorlist since we allow priorlist has some repeated ops that are also in other lists
   TF_RETURN_IF_ERROR(ValidateLists(fp16_whitelist_, fp16_blacklist_,
                                    fp16_graylist_, fp16_clearlist_));
 
@@ -1232,9 +1235,9 @@ Status AutoMixedPrecisionImpl::Optimize() {
   //    This is done to increase the number of ops in the white_set without
   //    affecting numerical stability.
 
-  absl::flat_hash_set<int> white_set;
+  absl::flat_hash_set<int> white_set, prior_set, intersection_set;
   VLOG(2) << "Beginning pass 1 to add whitelist ops";
-  AddWhitelistOps(&white_set);
+  AddWhitelistOps(&white_set, &prior_set);
   VLOG(2) << "Finished pass 1";
 
   if (white_set.empty()) {
@@ -1271,6 +1274,17 @@ Status AutoMixedPrecisionImpl::Optimize() {
 
   VLOG(2) << "Finding existing casts that can be made white";
   MakeCastsWhiteIfAllOutputsWhite(&white_set);
+
+  // Apply prior_list
+  VLOG(2) << "Only keep ops in the intersection of prior_set and whitelist if prior_set is not empty";
+  if (!prior_set.empty()) {
+    for (const auto& elem: prior_set) {
+      if (white_set.count(elem)) {
+        intersection_set.insert(elem);
+      }
+    }
+    white_set = intersection_set;
+  }
 
   VLOG(2) << "Beginning final pass to change type attributes and insert Cast "
              "ops at paint boundaries";
@@ -1313,7 +1327,7 @@ Status AutoMixedPrecisionImpl::AddDataStructureOpsToMap(
 }
 
 void AutoMixedPrecisionImpl::AddWhitelistOps(
-    absl::flat_hash_set<int>* white_set) const {
+    absl::flat_hash_set<int>* white_set, absl::flat_hash_set<int>* prior_set) const {
   // Add whitelisted ops to white_set.
   for (int root_idx = 0; root_idx < graph_type_view_.num_nodes(); ++root_idx) {
     const NodeTypeId& root = *graph_type_view_.GetNode(root_idx);
@@ -1327,8 +1341,16 @@ void AutoMixedPrecisionImpl::AddWhitelistOps(
                 << root.node->op() << " is on the whitelist";
       }
     }
+    // prior ops may be in greylist or clear list
+    if (fp16_priorlist_.count(root.node->name())) {
+      bool inserted = prior_set->insert(root_idx).second;
+      if (VLOG_IS_ON(2) && inserted) {
+        VLOG(2) << "Painting type " << "node " << root.node->name() << " Prior because it is on the priorlist";
+      }
+    }
   }
 }
+
 
 // Adds nodes to black_set iff they are on the blacklist or they are on a
 // forward path from a blacklist node to a black/gray node (including the node

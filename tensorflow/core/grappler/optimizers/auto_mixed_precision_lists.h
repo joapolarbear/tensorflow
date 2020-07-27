@@ -295,6 +295,19 @@ class AutoMixedPrecisionLists {
     UpdateList(&list, to_add, to_remove);
     return list;
   }
+
+  static gtl::FlatSet<string> PriorList() {
+    if (IsPseudoFastMath()) {
+      return gtl::FlatSet<string>{};
+    }
+    string to_add;
+    TF_CHECK_OK(ReadStringFromEnvVar(
+        "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_PRIORLIST_ADD", "", &to_add));
+
+    auto list = gtl::FlatSet<string>{};
+    UpdateList(&list, to_add, '');
+    return list;
+  }
 };
 
 }  // end namespace grappler
