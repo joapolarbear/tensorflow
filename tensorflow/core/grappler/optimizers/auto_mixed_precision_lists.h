@@ -305,7 +305,7 @@ class AutoMixedPrecisionLists {
         "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_PRIORLIST_ADD", "", &to_add));
 
     auto list = gtl::FlatSet<string>{};
-    UpdateList(&list, to_add, '');
+    UpdateList(&list, to_add, "");
     return list;
   }
 };
