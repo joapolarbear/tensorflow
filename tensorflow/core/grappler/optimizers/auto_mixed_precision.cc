@@ -1277,7 +1277,7 @@ Status AutoMixedPrecisionImpl::Optimize() {
 
   // Apply prior_list
   VLOG(2) << "Only keep ops in the intersection of prior_set and whitelist if prior_set is not empty";
-  if (!prior_set.empty()) {
+  if (!fp16_priorlist_.empty()) {
     for (const auto& elem: prior_set) {
       if (white_set.count(elem)) {
         intersection_set.insert(elem);
