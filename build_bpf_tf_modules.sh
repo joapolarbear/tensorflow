@@ -6,8 +6,7 @@ GREEN='\033[0;32m'
 
 BYTEPROFILE_TOOL_PREFIX="//tensorflow/compiler/byteprofile_xlatools"
 
-declare -a BPF_TARGETS=("byteprofile_xlatools_c_api.so" 
-                       "tfcompile_hlo"
+declare -a BPF_TARGETS=("tfcompile_hlo"
                        "extract_cycles")
 
 TF_XLA_TOOLS_PREFIX="//tensorflow/compiler/xla/tools"
