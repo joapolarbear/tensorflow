@@ -63,8 +63,8 @@ cc_library(
         "//tensorflow/compiler/xla/service:hlo",
         "//tensorflow/compiler/xla/service:compiler",
         "//tensorflow/compiler/xla/service/gpu:nvptx_compiler",
-        # "//tensorflow/core:framework_internal",
-        # "//tensorflow/core:lib",
+        "//tensorflow/core:framework_internal",
+        "//tensorflow/core:lib",
         # "//tensorflow/core:lib_internal",
         "//tensorflow/core:protos_all_cc",
     ]
@@ -98,14 +98,14 @@ tf_cc_binary(
         "//tensorflow/compiler/xla/service:hlo",
         "//tensorflow/compiler/xla/service:compiler",
         "//tensorflow/compiler/xla/service/gpu:nvptx_compiler",
-        # "//tensorflow/core:framework_internal",
-        # "//tensorflow/core:lib",
+        "//tensorflow/core:framework_internal",
+        "//tensorflow/core:lib",
         # "//tensorflow/core:lib_internal",
         "//tensorflow/core:protos_all_cc",
     ]
 )
 
-tf_cc_binary(
+tf_cc_shared_object(
     name = "byteprofile_xlatools_c_api.so",
     srcs = ["c_api.cc", "c_api.h"],
     #hdrs = ["c_api.h"],
