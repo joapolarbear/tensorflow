@@ -106,12 +106,12 @@ tf_cc_binary(
     ]
 )
 
-tf_cc_shared_object(
-    name = "byteprofile_xlatools_c_api.so",
-    srcs = ["c_api.cc", "c_api.h"],
-    #hdrs = ["c_api.h"],
-    deps = [
-        ":tfcompile_hlo_lib",
-    ],
-    linkshared=True,
-)
+# tf_cc_binary(
+#     name = "byteprofile_xlatools_c_api.so",
+#     srcs = ["c_api.cc", "c_api.h"],
+#     #hdrs = ["c_api.h"],
+#     deps = [
+#         ":tfcompile_hlo_lib",
+#     ],
+#     linkshared=True,
+# )
