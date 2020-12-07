@@ -143,7 +143,7 @@ Status LocalExecutable::ValidateExecutionOptions(
 StatusOr<std::pair<ServiceExecutableRunOptions, StreamPool::Ptr>>
 LocalExecutable::RunHelper(
     const absl::Span<const ShapedBuffer* const> arguments,
-    ExecutableRunOptions run_options) {
+    ExecutableRunOptions run_options, float* clock_rate_ghz) {
   TF_RETURN_IF_ERROR(
       ValidateExecutionOptions(arguments, run_options, *backend_));
 
@@ -156,6 +156,9 @@ LocalExecutable::RunHelper(
     TF_ASSIGN_OR_RETURN(
         stream, BorrowStreamForDevice(run_options.device_ordinal(), backend_));
     run_options.set_stream(stream.get());
+  }
+  if (clock_rate_ghz != nullptr) {
+    *clock_rate_ghz = run_options.stream()->parent()->GetDeviceDescription().clock_rate_ghz();
   }
   if (run_options.allocator() == nullptr) {
     run_options.set_allocator(backend_->memory_allocator());
@@ -173,12 +176,12 @@ LocalExecutable::RunHelper(
 
 StatusOr<ScopedShapedBuffer> LocalExecutable::Run(
     const absl::Span<const ShapedBuffer* const> arguments,
-    ExecutableRunOptions run_options) {
+    ExecutableRunOptions run_options, float* clock_rate_ghz) {
   TF_ASSIGN_OR_RETURN(auto options_and_stream,
-                      RunHelper(arguments, run_options));
+                      RunHelper(arguments, run_options, clock_rate_ghz));
   ExecutableRunOptions options = options_and_stream.first.run_options();
   options.set_device_ordinal(-1);
-  auto result = RunAsync(arguments, options);
+  auto result = RunAsync(arguments, options, clock_rate_ghz);
   Status block_status = options.stream()->BlockHostUntilDone();
   TF_RETURN_IF_ERROR(result.status());
   TF_RETURN_IF_ERROR(block_status);
@@ -187,9 +190,9 @@ StatusOr<ScopedShapedBuffer> LocalExecutable::Run(
 
 StatusOr<ScopedShapedBuffer> LocalExecutable::RunAsync(
     const absl::Span<const ShapedBuffer* const> arguments,
-    ExecutableRunOptions run_options) {
+    ExecutableRunOptions run_options, float* clock_rate_ghz) {
   TF_ASSIGN_OR_RETURN(auto options_and_stream,
-                      RunHelper(arguments, run_options));
+                      RunHelper(arguments, run_options, clock_rate_ghz));
   se::Stream* stream = run_options.stream();
 
   std::shared_ptr<HloSnapshot> snapshot;

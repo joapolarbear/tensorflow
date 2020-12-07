@@ -1,7 +1,7 @@
 load("//tensorflow:tensorflow.bzl", "tf_copts", "tf_kernel_library")
 
 package(
-    default_visibility = ["//tensorflow/compiler/tf2xla:internal"],
+    default_visibility = ["//tensorflow/compiler/tf2xla:internal", "//tensorflow/compiler/byteprofile_xlatools:__pkg__"],
     licenses = ["notice"],  # Apache 2.0
 )
 

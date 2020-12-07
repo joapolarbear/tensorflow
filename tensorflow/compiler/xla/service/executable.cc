@@ -174,6 +174,7 @@ StatusOr<ScopedShapedBuffer> Executable::ExecuteAsyncOnStreamWrapper(
     stream->ThenDoHostCallback([profile_ptr, device_description]() {
       XLA_LOG_LINES(tensorflow::INFO,
                     profile_ptr->ToString(*device_description));
+      XLA_LOG_LINES(tensorflow::INFO, "CLOCK_RATE: " + std::to_string(device_description->clock_rate_ghz()));
     });
   }
 

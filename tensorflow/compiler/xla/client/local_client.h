@@ -41,13 +41,13 @@ class LocalExecutable {
   // return the result.
   StatusOr<ScopedShapedBuffer> Run(
       const absl::Span<const ShapedBuffer* const> arguments,
-      ExecutableRunOptions run_options);
+      ExecutableRunOptions run_options, float* clock_rate_ghz=nullptr);
 
   // Similar to Run(), but need not block the host waiting for the computation
   // to complete before returning.
   StatusOr<ScopedShapedBuffer> RunAsync(
       const absl::Span<const ShapedBuffer* const> arguments,
-      ExecutableRunOptions run_options);
+      ExecutableRunOptions run_options, float* clock_rate_ghz=nullptr);
 
   // Return the options used to build the executable.
   const ExecutableBuildOptions& build_options() const { return build_options_; }
@@ -77,7 +77,7 @@ class LocalExecutable {
 
   StatusOr<std::pair<ServiceExecutableRunOptions, StreamPool::Ptr>> RunHelper(
       const absl::Span<const ShapedBuffer* const> arguments,
-      ExecutableRunOptions run_options);
+      ExecutableRunOptions run_options, float* clock_rate_ghz=nullptr);
 
   // The ordinal of the device which this executable was compiled for. The
   // executable can run on all equivalent devices (as determined by

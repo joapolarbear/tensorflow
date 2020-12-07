@@ -49,6 +49,9 @@ limitations under the License.
 #include <string>
 #include <utility>
 #include <vector>
+#include <dirent.h>
+#include <cstdio>
+#include <chrono>
 
 #include "absl/types/span.h"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -79,6 +82,8 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/util/command_line_flags.h"
 
+#include "tensorflow/compiler/xla/tools/kernel_utils.h"
+
 namespace xla {
 namespace tools {
 namespace {
@@ -102,17 +107,22 @@ struct Options {
   bool generate_fake_infeed = true;
   bool generate_fake_outfeed = true;
 
-  bool use_fake_data = false;
-  bool print_result = true;
+  bool use_fake_data = true;
+  bool print_result = false;
   int num_runs = 1;
+  int profile_start = 0;
+  int profile_end = 1;
+  int sample_id_start = 0;
 
   int intra_op_thread_pool_size;
 
   bool compile_only = false;
+  string dataset_path;
+  string temp_dir_path;
 };
 
 StatusOr<std::unique_ptr<LocalExecutable>> CompileExecutable(
-    const HloSnapshot& module, LocalClient* client) {
+    const HloSnapshot& module, LocalClient* client, const Options& opts) {
   XlaComputation computation(module.hlo().hlo_module());
   std::vector<Shape> argument_layouts;
   argument_layouts.reserve(
@@ -124,7 +134,11 @@ StatusOr<std::unique_ptr<LocalExecutable>> CompileExecutable(
     argument_layout_ptrs.push_back(&argument_layouts.back());
   }
   ExecutableBuildOptions exec_build_options;
-  *exec_build_options.mutable_debug_options() = GetDebugOptionsFromFlags();
+  auto debug_options = GetDebugOptionsFromFlags();
+  // modify debug options here
+  debug_options.set_xla_hlo_profile(true);
+  debug_options.set_xla_dump_to(opts.temp_dir_path);
+  *exec_build_options.mutable_debug_options() = debug_options;
   return client->Compile(computation, argument_layout_ptrs, exec_build_options);
 }
 
@@ -296,6 +310,10 @@ StatusOr<Literal> ReplayComputation(const HloSnapshot& module,
       client->platform(),
       {client->platform()->ExecutorForDevice(0).ValueOrDie()});
   absl::optional<ScopedShapedBuffer> final_result;
+
+  auto stat_collector = KernelStatsCollector();
+  std::string profile_path = opts.temp_dir_path + "/hlo_execution_profile_data";
+
   for (int i = 0; i < opts.num_runs; ++i) {
     // If xla_hlo_profile is enabled, print a noisy message before the last run,
     // making it easier to separate this profile from the others in the logspam.
@@ -314,8 +332,68 @@ StatusOr<Literal> ReplayComputation(const HloSnapshot& module,
     run_options.set_allocator(&allocator);
     run_options.set_intra_op_thread_pool(&thread_pool);
 
+    float clock_rate_ghz;
+    auto start = std::chrono::high_resolution_clock::now();
+
     TF_ASSIGN_OR_RETURN(ScopedShapedBuffer result,
-                        executable->Run(argument_ptrs, run_options));
+                        executable->Run(argument_ptrs, run_options, &clock_rate_ghz));
+
+    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+    int64_t nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+
+    // stat_collector.AppendExecutionTimeMicroSeconds(static_cast<double>(profile.compute_time_ns()) / 1e3);
+
+    stat_collector.AppendExecutionTimeMicroSeconds(static_cast<double>(profile.compute_time_ns()) / 1e3, static_cast<double>(nanoseconds) / 1e3);
+
+    if (i >= opts.profile_start - 1 && i < opts.profile_end -1) {
+      // std::cout << "Before stat_collector.Collect(" << profile_path << ")" << std::endl;
+      stat_collector.Collect(profile_path);
+      std::remove(profile_path.c_str());
+    }
+
+    if (i == opts.profile_end - 1) {
+      // std::cout << "clock_rate_ghz: " << clock_rate_ghz << std::endl;
+      // std::cout << "Before searching for hlo file name" << std::endl;
+      // search for the hlo file name
+      DIR *profile_dir;
+      struct dirent *file_in_dir;
+      // std::cout << "Before opendir" << std::endl;
+      profile_dir = opendir(opts.temp_dir_path.c_str());
+      std::string hlo_path;
+      if (profile_dir != NULL) {
+        // std::cout << "Before going through files" << std::endl;
+        while (file_in_dir = readdir(profile_dir)) {
+          std::string suffix("after_optimizations.txt");
+          std::string fname(file_in_dir->d_name);
+          if (fname.length() < suffix.length()) {
+            std::remove((opts.temp_dir_path + "/" + fname).c_str());
+          } else {
+            if (fname.compare(fname.length()-suffix.length(), fname.length(), suffix) != 0) {
+              std::remove((opts.temp_dir_path + "/" + fname).c_str());
+            } else {
+              hlo_path = opts.temp_dir_path + "/" + fname;
+            }
+          }
+        }
+      } else {
+        std::cerr << "Unable to read " << opts.temp_dir_path << " as profile dir." << std::endl;
+        exit(-1);
+      }
+      closedir(profile_dir);
+      if (hlo_path.length() == 0) {
+        std::cerr << "Unable to find optimized hlo in " << opts.temp_dir_path << "." << std::endl;
+        exit(-1);
+      }
+      bool result = stat_collector.Dump(opts.sample_id_start, clock_rate_ghz, hlo_path, opts.dataset_path);
+      if (!result) {
+        std::cerr << "Unable to generate and dump sample." << std::endl;
+        exit(-1);
+      } else {
+        std::cerr << "======== HLO samples dumped. ========" << std::endl; 
+      }
+      std::remove(hlo_path.c_str());
+    }
+
     LOG(INFO) << "Done executing in "
               << static_cast<double>(profile.compute_time_ns()) / 1e9
               << "s: " << module.hlo().hlo_module().name();
@@ -324,6 +402,7 @@ StatusOr<Literal> ReplayComputation(const HloSnapshot& module,
     // the result before rerunning the computation, so as to free up the
     // relevant memory.
     if (is_final_result) {
+      std::remove(profile_path.c_str());
       final_result = std::move(result);
     }
   }
@@ -389,7 +468,12 @@ StatusOr<HloSnapshot> ParseSingleHloFile(const string& filename,
   string contents;
   TF_RETURN_IF_ERROR(tensorflow::ReadFileToString(env, filename, &contents));
   HloModuleConfig config;
-  config.set_debug_options(GetDebugOptionsFromFlags());
+  auto debug_options = GetDebugOptionsFromFlags();
+  // modify debug options here
+  debug_options.set_xla_hlo_profile(true);
+  debug_options.set_xla_dump_to(opts.temp_dir_path);
+
+  config.set_debug_options(debug_options);
   StatusOr<std::unique_ptr<HloModule>> module =
       ParseAndReturnUnverifiedModule(contents, config);
   if (module.ok()) {
@@ -446,11 +530,16 @@ int RealMain(absl::Span<char* const> args, const Options& opts) {
         /*low_latency_hint=*/false);
     executables.resize(snapshots.size());
     for (int64 i = 0; i < snapshots.size(); ++i) {
-      thread_pool.Schedule([&snapshots, &executables, client, i] {
-        executables[i] = CompileExecutable(snapshots[i], client);
+      thread_pool.Schedule([&snapshots, &executables, client, i, opts] {
+        executables[i] = CompileExecutable(snapshots[i], client, opts);
       });
     }
-  }
+  }      tensorflow::Flag("sample_id_start", &opts.sample_id_start,
+                       "Which sample_id to start with."),
+      tensorflow::Flag("dataset_path", &opts.dataset_path,
+                       "Path to the destination dataset folder."),
+      tensorflow::Flag("temp_dir_path", &opts.temp_dir_path,
+                       "Path to temp folder used for xla dump."),
   LOG(INFO) << "Done compiling; now running the modules.";
 
   for (int64 i = 0; i < executables.size(); ++i) {
@@ -506,12 +595,22 @@ int RealMain(absl::Span<char* const> args, const Options& opts) {
 int main(int argc, char** argv) {
   xla::tools::Options opts;
   const std::vector<tensorflow::Flag> flag_list = {
+      tensorflow::Flag("sample_id_start", &opts.sample_id_start,
+                       "Which sample_id to start with."),
+      tensorflow::Flag("dataset_path", &opts.dataset_path,
+                       "Path to the destination dataset folder."),
+      tensorflow::Flag("temp_dir_path", &opts.temp_dir_path,
+                       "Path to temp folder used for xla dump."),
       tensorflow::Flag("use_fake_data", &opts.use_fake_data,
                        "Replay computation using fake data"),
       tensorflow::Flag("print_result", &opts.print_result,
                        "Print the result of the computation to stdout"),
       tensorflow::Flag("num_runs", &opts.num_runs,
                        "Number of times to run each computation"),
+      tensorflow::Flag("profile_start", &opts.profile_start,
+                  "At which iteration to start recording profile results."),
+      tensorflow::Flag("profile_end", &opts.profile_end,
+                       "At which iteration to end recording profile results."),
       tensorflow::Flag("fake_infeed_shape", &opts.fake_infeed_shape,
                        "Shape of fake data to construct for (infinite) infeed"),
       tensorflow::Flag("fake_outfeed_shape", &opts.fake_outfeed_shape,
