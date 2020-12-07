@@ -4,6 +4,7 @@ load(
     "//tensorflow:tensorflow.bzl",
     "if_cuda_or_rocm",
     "tf_cc_binary",
+    "tf_cc_shared_library",
     "tf_cc_test",
 )
 
