@@ -245,7 +245,7 @@ StatusOr<Literal> ReplayComputation(const HloSnapshot& module,
     // not to the fake computations we use for generating arguments.
     auto debug_opts = DefaultDebugOptionsIgnoringFlags();
     global_data_arguments =
-        MakeFakeArgumentsOrDie(computation, client, &debug_opts);
+        MakeFakeArguments(computation, client, &debug_opts);
     for (const auto& data : global_data_arguments) {
       argument_ptrs.push_back(
           client->GlobalDataToShapedBuffer(data->handle(), /*device_ordinal=*/0)
