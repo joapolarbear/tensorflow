@@ -1,7 +1,6 @@
 #include <string>
 #include <iostream>
 #include "tensorflow/compiler/byteprofile_xlatools/compile_to_hlo.h"
-#include "tensorflow/compiler/byteprofile_xlatools/gen_feature_vector.h"
 #include "tensorflow/compiler/byteprofile_xlatools/c_api.h"
 
 extern "C" {
