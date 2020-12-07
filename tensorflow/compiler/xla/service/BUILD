@@ -51,7 +51,7 @@ xla_proto_library(
     srcs = ["hlo_profile_printer_data.proto"],
 )
 
-tf_proto_library_cc(
+xla_proto_library(
     name = "hlo_execution_profile_data",
     srcs = ["hlo_execution_profile_data.proto"],
     protodeps = [":hlo_profile_printer_data"],
