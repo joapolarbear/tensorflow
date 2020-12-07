@@ -70,7 +70,7 @@ cc_library(
         "//tensorflow/compiler/xla/service:hlo",
         "//tensorflow/compiler/xla/service/gpu:infeed_manager",
         "//tensorflow/compiler/xla/service/gpu:outfeed_manager",
-        "//tensorflow/compiler/xla/service/gpu:backend_configs_cc",
+        "//tensorflow/compiler/xla/service/gpu:backend_configs",
         "//tensorflow/compiler/xla/service:hlo_execution_profile",
         "//tensorflow/compiler/xla/tools:hlo_module_loader",
         "//tensorflow/compiler/xla/tests:test_utils",

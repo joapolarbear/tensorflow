@@ -51,6 +51,12 @@ xla_proto_library(
     srcs = ["hlo_profile_printer_data.proto"],
 )
 
+tf_proto_library_cc(
+    name = "hlo_execution_profile_data",
+    srcs = ["hlo_execution_profile_data.proto"],
+    protodeps = [":hlo_profile_printer_data"],
+)
+
 # Filegroup used to collect source files for dependency checking.
 filegroup(
     name = "c_srcs",

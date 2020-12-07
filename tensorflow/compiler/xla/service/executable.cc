@@ -168,6 +168,16 @@ StatusOr<ScopedShapedBuffer> Executable::ExecuteAsyncOnStreamWrapper(
     }
   }
 
+  const auto& dump_path = module_config().debug_options().xla_dump_to();
+  if (module_config().debug_options().xla_hlo_profile() && profile_ptr != nullptr && !dump_path.empty()) {
+    const std::string full_path =
+        tensorflow::io::JoinPath(dump_path, "hlo_execution_profile_data");
+    TF_CHECK_OK(tensorflow::WriteStringToFile(
+        tensorflow::Env::Default(), full_path,
+        profile_ptr->ToProto().SerializeAsString()))
+        << "Error saving HloExecutionProfileData to " << full_path;
+  }
+
   if (profile_ptr != nullptr) {
     const se::DeviceDescription* device_description =
         &stream->parent()->GetDeviceDescription();

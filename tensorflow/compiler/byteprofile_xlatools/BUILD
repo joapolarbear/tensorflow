@@ -27,7 +27,7 @@ tf_cc_binary(
     name = "extract_cycles",
     srcs = ["extract_cycles.cc"],
     deps = [
-        "//tensorflow/compiler/xla/service/gpu:backend_configs_cc",
+        "//tensorflow/compiler/xla/service/gpu:backend_configs",
         "//tensorflow/compiler/xla/tools:hlo_module_loader",
         "//tensorflow/compiler/xla:statusor",
         "//tensorflow/compiler/xla:shape_util",
@@ -74,10 +74,10 @@ cc_library(
 tf_cc_binary(
     name = "tfcompile_hlo",
     srcs = [
-        "compile_to_hlo.cc",
+        "compile_to_hlo.cc", "compile_to_hlo.h"
     ],
     deps = [
-        "//tensorflow/compiler/aot/embedded_protocol_buffers",
+        "//tensorflow/compiler/aot:embedded_protocol_buffers",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
