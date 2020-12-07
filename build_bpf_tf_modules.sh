@@ -18,7 +18,7 @@ bpf_failure_counter=0
 
 for i in ${!BPF_TARGETS[@]}; do
     target=${BPF_TARGETS[$i]}
-    if bazel build ${BYTEPROFILE_TOOL_PREFIX}/${target};
+    if bazel build ${BYTEPROFILE_TOOL_PREFIX}:${target};
     then
         echo -e "${GREEN}[$((i+1)) / ${#BPF_TARGETS[@]}]${NC} target ${target} built successfully."
     else
@@ -36,7 +36,7 @@ bpf_failure_counter=0
 
 for i in ${!TF_XLA_TOOL_TARGETS[@]}; do
     target=${TF_XLA_TOOL_TARGETS[$i]}
-    if bazel build ${TF_XLA_TOOLS_PREFIX}/${target};
+    if bazel build ${TF_XLA_TOOLS_PREFIX}:${target};
     then
         echo -e "${GREEN}[$((i+1))  / ${#TF_XLA_TOOL_TARGETS[@]}]${NC} target ${target} built successfully."
     else
