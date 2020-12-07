@@ -54,7 +54,7 @@ xla_proto_library(
 xla_proto_library(
     name = "hlo_execution_profile_data",
     srcs = ["hlo_execution_profile_data.proto"],
-    protodeps = [":hlo_profile_printer_data"],
+    deps = [":hlo_profile_printer_data"],
 )
 
 # Filegroup used to collect source files for dependency checking.
