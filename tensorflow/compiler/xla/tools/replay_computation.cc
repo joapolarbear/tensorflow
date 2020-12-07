@@ -57,6 +57,7 @@ limitations under the License.
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
+#include "tensorflow/compiler/xla/client/lib/testing.h"
 #include "tensorflow/compiler/xla/client/global_data.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
@@ -245,7 +246,7 @@ StatusOr<Literal> ReplayComputation(const HloSnapshot& module,
     // not to the fake computations we use for generating arguments.
     auto debug_opts = DefaultDebugOptionsIgnoringFlags();
     global_data_arguments =
-        MakeFakeArguments(computation, client, &debug_opts);
+        MakeFakeArgumentsOrDie(computation, client, &debug_opts);
     for (const auto& data : global_data_arguments) {
       argument_ptrs.push_back(
           client->GlobalDataToShapedBuffer(data->handle(), /*device_ordinal=*/0)
