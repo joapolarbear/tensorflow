@@ -534,12 +534,7 @@ int RealMain(absl::Span<char* const> args, const Options& opts) {
         executables[i] = CompileExecutable(snapshots[i], client, opts);
       });
     }
-  }      tensorflow::Flag("sample_id_start", &opts.sample_id_start,
-                       "Which sample_id to start with."),
-      tensorflow::Flag("dataset_path", &opts.dataset_path,
-                       "Path to the destination dataset folder."),
-      tensorflow::Flag("temp_dir_path", &opts.temp_dir_path,
-                       "Path to temp folder used for xla dump."),
+  }
   LOG(INFO) << "Done compiling; now running the modules.";
 
   for (int64 i = 0; i < executables.size(); ++i) {
