@@ -58,7 +58,7 @@ struct ElementaryOp {
             }
             s.append(", ");
         }
-        s.append(std::to_string(output_shape.element_type()) + ", ")
+        s.append(std::to_string(output_shape.element_type()) + ", ");
         int32_t output_rank = output_shape.dimensions_size();
         if (output_rank == 0) {
             s.append("1");
