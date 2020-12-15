@@ -44,7 +44,7 @@ struct ElementaryOp {
                 std::to_string(input_shapes.size()) + ", ");
         for (int32_t i = 0; i < input_shapes.size(); i++) {
             auto shape = input_shapes[i];
-            s.append(input_names[i] + ", ");
+            s.append(input_names[i] + ", " + std::to_string(shape.element_type()) + ", ");
             int32_t rank = shape.dimensions_size();
             if (rank == 0) {
                 s.append("1");
@@ -58,6 +58,7 @@ struct ElementaryOp {
             }
             s.append(", ");
         }
+        s.append(std::to_string(output_shape.element_type()) + ", ")
         int32_t output_rank = output_shape.dimensions_size();
         if (output_rank == 0) {
             s.append("1");
