@@ -26,9 +26,9 @@ namespace xla {
 // Flattening associates each call site with a unique computation (for
 // sequential calling contexts) This simplifies buffer assignment and
 // points-to analysis (see b/36865746 for details).
-class FlattenCallGraph : public HloModulePass {
+class FlattenCallGraph : public HloPassInterface {
  public:
-  absl::string_view name() const override { return "flatten-call-graph"; }
+  tensorflow::StringPiece name() const override { return "flatten-call-graph"; }
 
   // Duplicates computations called from multiple call- or while-nodes to
   // flatten the call graph.

@@ -14,11 +14,9 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/compiler/xla/service/llvm_compiler.h"
-#include "absl/memory/memory.h"
-#include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/service/backend.h"
 #include "tensorflow/compiler/xla/service/cpu/cpu_compiler.h"
-#include "tensorflow/compiler/xla/service/gpu/nvptx_compiler.h"
+#include "tensorflow/compiler/xla/service/gpu/gpu_compiler.h"
 #include "tensorflow/compiler/xla/service/hlo_instruction.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
@@ -45,7 +43,7 @@ class LLVMCompilerTest : public ::testing::Test {
   ~LLVMCompilerTest() override {}
 
  protected:
-  using Platform = se::Platform;
+  using Platform = ::perftools::gputools::Platform;
 
   explicit LLVMCompilerTest(string platform_name)
       : platform_name_(std::move(platform_name)) {}
@@ -66,9 +64,9 @@ class LLVMCompilerTest : public ::testing::Test {
     // Create HLO module, and run the compiler.
     auto builder = HloComputation::Builder(TestName());
     builder.AddInstruction(
-        HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(42.0)));
+        HloInstruction::CreateConstant(Literal::CreateR0<float>(42.0)));
 
-    auto hlo_module = CreateNewUnverifiedModule();
+    auto hlo_module = CreateNewModule();
     hlo_module->AddEntryComputation(builder.Build());
 
     compiler->SetPreOptimizationHook(pre_opt_hook);
@@ -76,8 +74,7 @@ class LLVMCompilerTest : public ::testing::Test {
 
     ASSERT_TRUE(compiler
                     ->RunBackend(std::move(hlo_module),
-                                 backend_->default_stream_executor(),
-                                 /*device_allocator=*/nullptr)
+                                 backend_->default_stream_executor())
                     .ok());
 
     // Test that hooks were called.
@@ -88,22 +85,20 @@ class LLVMCompilerTest : public ::testing::Test {
   void TestMultiModuleCompilation(LLVMCompiler *compiler) {
     HloComputation::Builder builder(TestName());
     builder.AddInstruction(
-        HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(42.0)));
+        HloInstruction::CreateConstant(Literal::CreateR0<float>(42.0)));
 
-    std::unique_ptr<HloModule> hlo_module = CreateNewUnverifiedModule();
+    std::unique_ptr<HloModule> hlo_module = CreateNewModule();
     hlo_module->AddEntryComputation(builder.Build());
 
-    auto module_group = absl::make_unique<HloModuleGroup>("test_module_group");
-    module_group->push_back(hlo_module->Clone());
-    module_group->push_back(std::move(hlo_module));
+    std::vector<std::unique_ptr<HloModule>> modules;
+    modules.push_back(hlo_module->Clone());
+    modules.push_back(std::move(hlo_module));
 
-    std::vector<std::vector<se::StreamExecutor *>> executors;
+    std::vector<std::vector<perftools::gputools::StreamExecutor *>> executors;
     executors.push_back({backend_->default_stream_executor()});
     executors.push_back({backend_->default_stream_executor()});
 
-    EXPECT_IS_OK(compiler->Compile(std::move(module_group),
-                                   std::move(executors),
-                                   /*device_allocator=*/nullptr));
+    EXPECT_IS_OK(compiler->Compile(std::move(modules), std::move(executors)));
   }
 
  private:
@@ -124,10 +119,11 @@ class LLVMCompilerTest : public ::testing::Test {
     return ::testing::UnitTest::GetInstance()->current_test_info()->name();
   }
 
-  static std::unique_ptr<HloModule> CreateNewUnverifiedModule() {
+  static std::unique_ptr<HloModule> CreateNewModule() {
     HloModuleConfig config;
-    config.set_debug_options(GetDebugOptionsFromFlags());
-    return absl::make_unique<HloModule>(TestName(), config);
+    config.set_debug_options(legacy_flags::GetDebugOptionsFromFlags());
+    return MakeUnique<HloModule>(TestName(), VersionedComputationHandle(),
+                                 config);
   }
 };
 
@@ -147,17 +143,17 @@ TEST_F(CpuCompilerTest, HooksTest) {
 }
 
 TEST_F(GpuCompilerTest, HooksTest) {
-  gpu::NVPTXCompiler compiler;
+  gpu::GpuCompiler compiler;
   TestCompilerHooks(&compiler);
 }
 
-TEST_F(CpuCompilerTest, CpuMultiModuleCompilation) {
+TEST_F(CpuCompilerTest, MultiModuleCompilation) {
   cpu::CpuCompiler compiler;
   TestMultiModuleCompilation(&compiler);
 }
 
-TEST_F(GpuCompilerTest, NVPTXMultiModuleCompilation) {
-  gpu::NVPTXCompiler compiler;
+TEST_F(GpuCompilerTest, MultModuleCompilation) {
+  gpu::GpuCompiler compiler;
   TestMultiModuleCompilation(&compiler);
 }
 }  // namespace

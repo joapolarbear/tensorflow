@@ -40,7 +40,7 @@ class StringToNumberOp : public OpKernel {
     // underlying storage.
     const Tensor* input_tensor;
     OP_REQUIRES_OK(context, context->input("string_tensor", &input_tensor));
-    const auto& input_flat = input_tensor->flat<tstring>();
+    const auto& input_flat = input_tensor->flat<string>();
 
     Tensor* output_tensor = nullptr;
     OP_REQUIRES_OK(context,
@@ -49,14 +49,42 @@ class StringToNumberOp : public OpKernel {
     auto output_flat = output_tensor->flat<OutputType>();
 
     for (int i = 0; i < input_flat.size(); ++i) {
-      OP_REQUIRES(
-          context,
-          strings::SafeStringToNumeric<OutputType>(input_flat(i),
-                                                   &output_flat(i)),
-          errors::InvalidArgument(kErrorMessage, input_flat(i).c_str()));
+      Convert(input_flat(i), &output_flat(i), context);
     }
   }
+
+ private:
+  void Convert(const string& s, OutputType* output_data,
+               OpKernelContext* context);
 };
+
+template <>
+void StringToNumberOp<float>::Convert(const string& s, float* output_data,
+                                      OpKernelContext* context) {
+  OP_REQUIRES(context, strings::safe_strtof(s.c_str(), output_data),
+              errors::InvalidArgument(kErrorMessage, s));
+}
+
+template <>
+void StringToNumberOp<double>::Convert(const string& s, double* output_data,
+                                       OpKernelContext* context) {
+  OP_REQUIRES(context, strings::safe_strtod(s.c_str(), output_data),
+              errors::InvalidArgument(kErrorMessage, s));
+}
+
+template <>
+void StringToNumberOp<int32>::Convert(const string& s, int32* output_data,
+                                      OpKernelContext* context) {
+  OP_REQUIRES(context, strings::safe_strto32(s, output_data),
+              errors::InvalidArgument(kErrorMessage, s));
+}
+
+template <>
+void StringToNumberOp<int64>::Convert(const string& s, int64* output_data,
+                                      OpKernelContext* context) {
+  OP_REQUIRES(context, strings::safe_strto64(s, output_data),
+              errors::InvalidArgument(kErrorMessage, s));
+}
 
 // Registers the currently supported output types.
 #define REGISTER(type)                                           \

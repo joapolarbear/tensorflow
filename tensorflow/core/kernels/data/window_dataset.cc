@@ -14,31 +14,22 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/kernels/data/window_dataset.h"
 
-#include "tensorflow/core/kernels/data/name_utils.h"
-#include "tensorflow/core/lib/core/errors.h"
-
 namespace tensorflow {
-namespace data {
 namespace {
-
-constexpr char kWindow[] = "Window";
-constexpr char kWindowDataset[] = "WindowDataset";
-constexpr char kCurIndex[] = "i";
 
 class WindowDataset : public DatasetBase {
  public:
   WindowDataset(std::vector<std::vector<Tensor>> elements,
                 DataTypeVector output_types,
                 std::vector<PartialTensorShape> output_shapes)
-      : DatasetBase(DatasetContext({kWindow})),
-        elements_(std::move(elements)),
+      : elements_(std::move(elements)),
         output_types_(std::move(output_types)),
         output_shapes_(std::move(output_shapes)) {}
 
-  std::unique_ptr<IteratorBase> MakeIteratorInternal(
+  std::unique_ptr<IteratorBase> MakeIterator(
       const string& prefix) const override {
-    return absl::make_unique<Iterator>(
-        Iterator::Params{this, name_utils::IteratorPrefix(kWindow, prefix)});
+    return std::unique_ptr<IteratorBase>(
+        new Iterator({this, strings::StrCat(prefix, "::Window")}));
   }
 
   const DataTypeVector& output_dtypes() const override { return output_types_; }
@@ -47,28 +38,7 @@ class WindowDataset : public DatasetBase {
     return output_shapes_;
   }
 
-  int64 AllocatedBytes() const override {
-    int64 allocated_bytes = 0;
-    for (auto& element : elements_) {
-      allocated_bytes += GetAllocatedBytes(element);
-    }
-    return allocated_bytes;
-  }
-
-  int64 Cardinality() const override { return elements_.size(); }
-
-  string DebugString() const override { return kWindowDataset; }
-
-  Status CheckExternalState() const override { return Status::OK(); }
-
- protected:
-  // TODO(b/110981596): Support checkpointing.
-  Status AsGraphDefInternal(SerializationContext* ctx,
-                            DatasetGraphDefBuilder* b,
-                            Node** output) const override {
-    return errors::Unimplemented("%s does not support serialization",
-                                 DebugString());
-  }
+  string DebugString() override { return "WindowDataset"; }
 
  private:
   class Iterator : public DatasetIterator<WindowDataset> {
@@ -86,21 +56,6 @@ class WindowDataset : public DatasetBase {
         *end_of_sequence = false;
         *out_tensors = dataset()->elements_[i_++];
       }
-      return Status::OK();
-    }
-
-    Status SaveInternal(IteratorStateWriter* writer) override {
-      mutex_lock l(mu_);
-      TF_RETURN_IF_ERROR(writer->WriteScalar(full_name(kCurIndex), i_));
-      return Status::OK();
-    }
-
-    Status RestoreInternal(IteratorContext* ctx,
-                           IteratorStateReader* reader) override {
-      mutex_lock l(mu_);
-      int64 i;
-      TF_RETURN_IF_ERROR(reader->ReadScalar(full_name(kCurIndex), &i));
-      i_ = size_t(i);
       return Status::OK();
     }
 
@@ -126,5 +81,4 @@ Status NewWindowDataset(std::vector<std::vector<Tensor>> elements,
   return Status::OK();
 }
 
-}  // namespace data
 }  // namespace tensorflow

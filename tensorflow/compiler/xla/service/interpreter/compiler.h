@@ -44,23 +44,25 @@ class InterpreterCompiler : public Compiler {
   ~InterpreterCompiler() override {}
 
   StatusOr<std::unique_ptr<HloModule>> RunHloPasses(
-      std::unique_ptr<HloModule> hlo_module, se::StreamExecutor* stream_exec,
-      se::DeviceMemoryAllocator* device_allocator) override;
+      std::unique_ptr<HloModule> hlo_module,
+      perftools::gputools::StreamExecutor* stream_exec) override;
+
   StatusOr<std::unique_ptr<Executable>> RunBackend(
-      std::unique_ptr<HloModule> hlo_module, se::StreamExecutor* stream_exec,
-      se::DeviceMemoryAllocator* device_allocator) override;
+      std::unique_ptr<HloModule> hlo_module,
+      perftools::gputools::StreamExecutor* stream_exec) override;
+
   StatusOr<std::vector<std::unique_ptr<Executable>>> Compile(
-      std::unique_ptr<HloModuleGroup> module_group,
-      std::vector<std::vector<se::StreamExecutor*>> stream_exec,
-      se::DeviceMemoryAllocator* device_allocator) override;
+      std::vector<std::unique_ptr<HloModule>> hlo_modules,
+      std::vector<std::vector<perftools::gputools::StreamExecutor*>>
+          stream_exec) override;
 
   StatusOr<std::vector<std::unique_ptr<AotCompilationResult>>>
-  CompileAheadOfTime(std::unique_ptr<HloModuleGroup> module_group,
+  CompileAheadOfTime(std::vector<std::unique_ptr<HloModule>> hlo_modules,
                      const AotCompilationOptions& aot_options) override;
 
   HloCostAnalysis::ShapeSizeFunction ShapeSizeBytesFunction() const override;
 
-  se::Platform::Id PlatformId() const override;
+  perftools::gputools::Platform::Id PlatformId() const override;
 
  private:
   Status RunHloOptimization(HloModule* hlo_module);

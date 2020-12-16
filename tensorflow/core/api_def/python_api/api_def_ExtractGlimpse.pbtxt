@@ -1,4 +1,6 @@
 op {
   graph_op_name: "ExtractGlimpse"
-  visibility: HIDDEN
+  endpoint {
+    name: "image.extract_glimpse"
+  }
 }

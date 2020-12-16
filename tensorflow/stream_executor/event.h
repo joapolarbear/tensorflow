@@ -20,7 +20,8 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/platform/port.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 namespace internal {
 class EventInterface;
@@ -61,9 +62,6 @@ class Event {
   // Returns a pointer to the underlying platform-specific implementation.
   internal::EventInterface* implementation() { return implementation_.get(); }
 
-  Event(Event&&) = default;
-  Event& operator=(Event&&) = default;
-
  private:
   friend class Stream;
 
@@ -78,6 +76,7 @@ class Event {
   SE_DISALLOW_COPY_AND_ASSIGN(Event);
 };
 
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_EVENT_H_

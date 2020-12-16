@@ -26,9 +26,6 @@ limitations under the License.
 namespace tensorflow {
 namespace tfprof {
 namespace {
-
-const char* const kProfilePrefix = "Profile:\n";
-
 bool CreateRunMetadataNode(const string& name, NodeDef* def) {
   // TODO(xpan): Better solution than blacklisting this 2 nodes. They
   // actually cost some resources, maybe include them. Some nodes, such
@@ -51,7 +48,6 @@ TFStats::TFStats(std::unique_ptr<GraphDef> graph,
                  std::unique_ptr<OpLogProto> op_log,
                  std::unique_ptr<checkpoint::CheckpointReader> ckpt_reader)
     : has_code_traces_(false),
-      miss_accelerator_stream_(false),
       ckpt_reader_(std::move(ckpt_reader)) {
   CHECK(graph) << "Must at least have GraphDef";
 
@@ -74,9 +70,7 @@ TFStats::TFStats(std::unique_ptr<GraphDef> graph,
 
 TFStats::TFStats(const string& filename,
                  std::unique_ptr<checkpoint::CheckpointReader> ckpt_reader)
-    : has_code_traces_(false),
-      miss_accelerator_stream_(false),
-      ckpt_reader_(std::move(ckpt_reader)) {
+    : has_code_traces_(false), ckpt_reader_(std::move(ckpt_reader)) {
   string str;
   Status s = ReadFileToString(Env::Default(), filename, &str);
   if (!s.ok()) {
@@ -147,21 +141,18 @@ const GraphNodeProto& TFStats::ShowGraphNode(const string& cmd,
   if (!Validate(opts)) {
     return empty_graph_node_;
   }
-  string prefix = MaybeReportMissingTrace();
-  prefix += QueryDoc(cmd, opts) + kProfilePrefix;
-
   if (cmd == kCmds[0]) {
-    return scope_view_->Show(prefix, opts);
+    return scope_view_->Show(opts);
   } else if (cmd == kCmds[1]) {
     if (opts.step < 0 && opts.output_type == kOutput[0]) {
       for (int64 step : steps_) {
         Options nopts = opts;
         nopts.step = step;
-        graph_view_->Show(prefix, nopts);
+        graph_view_->Show(nopts);
       }
       return empty_graph_node_;
     }
-    return graph_view_->Show(prefix, opts);
+    return graph_view_->Show(opts);
   } else {
     fprintf(stderr, "Unknown command: %s\n", cmd.c_str());
     return empty_graph_node_;
@@ -173,17 +164,14 @@ const MultiGraphNodeProto& TFStats::ShowMultiGraphNode(
   if (!Validate(opts)) {
     return empty_multi_graph_node_;
   }
-  string prefix = MaybeReportMissingTrace();
-  prefix += QueryDoc(cmd, opts) + kProfilePrefix;
-
   if (cmd == kCmds[2]) {
     if (!has_code_traces()) {
       fprintf(stderr, "No code trace information\n");
       return empty_multi_graph_node_;
     }
-    return code_view_->Show(prefix, opts);
+    return code_view_->Show(opts);
   } else if (cmd == kCmds[3]) {
-    return op_view_->Show(prefix, opts);
+    return op_view_->Show(opts);
   } else {
     fprintf(stderr, "Unknown command: %s\n", cmd.c_str());
     return empty_multi_graph_node_;
@@ -198,9 +186,8 @@ void TFStats::AddGraph(std::unique_ptr<GraphDef> graph) {
       continue;
     }
     node_added = true;
-    size_t num_nodes = nodes_map_.size();
     nodes_map_[node.name()] = std::unique_ptr<TFGraphNode>(
-        new TFGraphNode(&node, num_nodes, &nodes_map_));
+        new TFGraphNode(&node, nodes_map_.size(), &nodes_map_));
     node_defs[node.name()] = &node;
   }
   for (auto it = node_defs.begin(); it != node_defs.end(); it++) {
@@ -271,17 +258,7 @@ void TFStats::AddRunMeta(int64 step, std::unique_ptr<RunMetadata> run_meta) {
   }
   steps_.insert(step);
 
-  bool has_gpu_scheduling = false;
-  bool has_gpu_stream = false;
-
   for (const auto& dev_stat : run_meta->step_stats().dev_stats()) {
-    string dev = absl::AsciiStrToLower(dev_stat.device());
-    if (IsPlacedOnAccelerator(dev)) {
-      has_gpu_scheduling = true;
-      if (CountAsAcceleratorTime(dev)) {
-        has_gpu_stream = true;
-      }
-    }
     for (const NodeExecStats& node_stat : dev_stat.node_stats()) {
       string name = node_stat.node_name();
       // Sometimes the node_name is suffixed with unnecessary information.
@@ -293,9 +270,8 @@ void TFStats::AddRunMeta(int64 step, std::unique_ptr<RunMetadata> run_meta) {
       if (node == nodes_map_.end()) {
         NodeDef def;
         if (CreateRunMetadataNode(name, &def)) {
-          size_t num_nodes = nodes_map_.size();
           nodes_map_[name] = std::unique_ptr<TFGraphNode>(
-              new TFGraphNode(&def, num_nodes, &nodes_map_));
+              new TFGraphNode(&def, nodes_map_.size(), &nodes_map_));
           nodes_map_.at(name)->AddStepStat(step, dev_stat.device(), node_stat);
         }
       } else {
@@ -304,26 +280,9 @@ void TFStats::AddRunMeta(int64 step, std::unique_ptr<RunMetadata> run_meta) {
       }
     }
   }
-
-  if (has_gpu_scheduling && !has_gpu_stream) {
-    miss_accelerator_stream_ = true;
-  }
 }
 
-string TFStats::MaybeReportMissingTrace() const {
-  string report = "";
-  if (miss_accelerator_stream_) {
-    report +=
-        "\n\nFound accelerator operation but misses accelerator "
-        "stream stats!\n\n"
-        "It's likely a gpu tracing issue rather than tf-profiler issue.\n"
-        "If you found your operation missing accelerator time, "
-        "consider filing a bug to xprof-dev@!\n\n";
-  }
-  return report;
-}
-
-void TFStats::SerializeToString(string* content) {
+void TFStats::WriteProfile(const string& filename) {
   ProfileProto profile;
   for (const auto& entry : id_to_string_) {
     (*profile.mutable_id_to_string())[entry.first] = entry.second;
@@ -337,17 +296,11 @@ void TFStats::SerializeToString(string* content) {
   }
 
   profile.set_has_trace(has_code_traces_);
-  profile.set_miss_accelerator_stream(miss_accelerator_stream_);
   for (int64 s : steps_) {
     profile.add_steps(s);
   }
-  *content = profile.SerializeAsString();
-}
-
-void TFStats::WriteProfile(const string& filename) {
-  string content;
-  SerializeToString(&content);
-  Status s = WriteStringToFile(Env::Default(), filename, content);
+  Status s =
+      WriteStringToFile(Env::Default(), filename, profile.SerializeAsString());
   if (!s.ok()) {
     fprintf(stderr, "%s\n", s.ToString().c_str());
   }

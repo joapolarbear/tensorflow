@@ -18,6 +18,7 @@ limitations under the License.
 #include "tensorflow/core/lib/strings/numbers.h"
 
 namespace tensorflow {
+
 namespace {
 
 constexpr size_t kBufferSize = 1024 * 1024;  // In bytes.
@@ -33,10 +34,37 @@ bool IsPartitionEmpty(const BigQueryTablePartition& partition) {
 
 Status ParseJson(StringPiece json, Json::Value* result) {
   Json::Reader reader;
-  if (!reader.parse(string(json), *result)) {
+  if (!reader.parse(json.ToString(), *result)) {
     return errors::Internal("Couldn't parse JSON response from BigQuery.");
   }
   return Status::OK();
+}
+
+string ColumnTypeToString(BigQueryTableAccessor::ColumnType enum_type) {
+  switch (enum_type) {
+    case BigQueryTableAccessor::ColumnType::kRecord:
+      return "RECORD";
+    case BigQueryTableAccessor::ColumnType::kString:
+      return "STRING";
+    case BigQueryTableAccessor::ColumnType::kBytes:
+      return "BYTES";
+    case BigQueryTableAccessor::ColumnType::kInteger:
+      return "INTEGER";
+    case BigQueryTableAccessor::ColumnType::kFloat:
+      return "FLOAT";
+    case BigQueryTableAccessor::ColumnType::kBoolean:
+      return "BOOLEAN";
+    case BigQueryTableAccessor::ColumnType::kTimestamp:
+      return "TIMESTAMP";
+    case BigQueryTableAccessor::ColumnType::kDate:
+      return "DATE";
+    case BigQueryTableAccessor::ColumnType::kTime:
+      return "TIME";
+    case BigQueryTableAccessor::ColumnType::kDatetime:
+      return "DATETIME";
+    case BigQueryTableAccessor::ColumnType::kNone:
+      return "NONE";
+  }
 }
 
 Status ParseColumnType(const string& type,
@@ -85,7 +113,7 @@ Status BigQueryTableAccessor::New(
     int64 timestamp_millis, int64 row_buffer_size, const string& end_point,
     const std::vector<string>& columns, const BigQueryTablePartition& partition,
     std::unique_ptr<AuthProvider> auth_provider,
-    std::shared_ptr<HttpRequest::Factory> http_request_factory,
+    std::unique_ptr<HttpRequest::Factory> http_request_factory,
     std::unique_ptr<BigQueryTableAccessor>* accessor) {
   if (timestamp_millis <= 0) {
     return errors::InvalidArgument(
@@ -94,19 +122,29 @@ Status BigQueryTableAccessor::New(
   const string& big_query_end_point =
       end_point.empty() ? kBigQueryEndPoint : end_point;
   if (auth_provider == nullptr && http_request_factory == nullptr) {
-    http_request_factory = std::make_shared<CurlHttpRequest::Factory>();
-    auto compute_engine_metadata_client =
-        std::make_shared<ComputeEngineMetadataClient>(http_request_factory);
-    auth_provider = std::unique_ptr<AuthProvider>(
-        new GoogleAuthProvider(compute_engine_metadata_client));
+    accessor->reset(new BigQueryTableAccessor(
+        project_id, dataset_id, table_id, timestamp_millis, row_buffer_size,
+        big_query_end_point, columns, partition));
+  } else {
+    accessor->reset(new BigQueryTableAccessor(
+        project_id, dataset_id, table_id, timestamp_millis, row_buffer_size,
+        big_query_end_point, columns, partition, std::move(auth_provider),
+        std::move(http_request_factory)));
   }
-
-  accessor->reset(new BigQueryTableAccessor(
-      project_id, dataset_id, table_id, timestamp_millis, row_buffer_size,
-      big_query_end_point, columns, partition, std::move(auth_provider),
-      std::move(http_request_factory)));
-
   return (*accessor)->ReadSchema();
+}
+
+BigQueryTableAccessor::BigQueryTableAccessor(
+    const string& project_id, const string& dataset_id, const string& table_id,
+    int64 timestamp_millis, int64 row_buffer_size, const string& end_point,
+    const std::vector<string>& columns, const BigQueryTablePartition& partition)
+    : BigQueryTableAccessor(
+          project_id, dataset_id, table_id, timestamp_millis, row_buffer_size,
+          end_point, columns, partition,
+          std::unique_ptr<AuthProvider>(new GoogleAuthProvider()),
+          std::unique_ptr<HttpRequest::Factory>(
+              new CurlHttpRequest::Factory())) {
+  row_buffer_.resize(row_buffer_size);
 }
 
 BigQueryTableAccessor::BigQueryTableAccessor(
@@ -114,7 +152,7 @@ BigQueryTableAccessor::BigQueryTableAccessor(
     int64 timestamp_millis, int64 row_buffer_size, const string& end_point,
     const std::vector<string>& columns, const BigQueryTablePartition& partition,
     std::unique_ptr<AuthProvider> auth_provider,
-    std::shared_ptr<HttpRequest::Factory> http_request_factory)
+    std::unique_ptr<HttpRequest::Factory> http_request_factory)
     : project_id_(project_id),
       dataset_id_(dataset_id),
       table_id_(table_id),
@@ -164,21 +202,22 @@ Status BigQueryTableAccessor::ReadRow(int64* row_id, Example* example) {
     std::unique_ptr<HttpRequest> request(http_request_factory_->Create());
     std::vector<char> output_buffer;
     output_buffer.reserve(kBufferSize);
+    TF_RETURN_IF_ERROR(request->Init());
 
     // The first time that we access BigQuery there is no page token. After that
     // we use the page token (which returns rows faster).
     if (!next_page_token_.empty()) {
-      request->SetUri(strings::StrCat(
+      TF_RETURN_IF_ERROR(request->SetUri(strings::StrCat(
           BigQueryUriPrefix(), "data?maxResults=", ComputeMaxResultsArg(),
-          "&pageToken=", request->EscapeString(next_page_token_)));
+          "&pageToken=", request->EscapeString(next_page_token_))));
       first_buffered_row_index_ += row_buffer_.size();
     } else {
-      request->SetUri(strings::StrCat(
+      TF_RETURN_IF_ERROR(request->SetUri(strings::StrCat(
           BigQueryUriPrefix(), "data?maxResults=", ComputeMaxResultsArg(),
-          "&startIndex=", first_buffered_row_index_));
+          "&startIndex=", first_buffered_row_index_)));
     }
-    request->AddAuthBearerHeader(auth_token);
-    request->SetResultBuffer(&output_buffer);
+    TF_RETURN_IF_ERROR(request->AddAuthBearerHeader(auth_token));
+    TF_RETURN_IF_ERROR(request->SetResultBuffer(&output_buffer));
     TF_RETURN_WITH_CONTEXT_IF_ERROR(request->Send(), " when reading rows from ",
                                     FullTableName());
 
@@ -254,9 +293,10 @@ Status BigQueryTableAccessor::ReadSchema() {
   std::unique_ptr<HttpRequest> request(http_request_factory_->Create());
   std::vector<char> output_buffer;
   output_buffer.reserve(kBufferSize);
-  request->SetUri(BigQueryUriPrefix());
-  request->AddAuthBearerHeader(auth_token);
-  request->SetResultBuffer(&output_buffer);
+  TF_RETURN_IF_ERROR(request->Init());
+  TF_RETURN_IF_ERROR(request->SetUri(BigQueryUriPrefix()));
+  TF_RETURN_IF_ERROR(request->AddAuthBearerHeader(auth_token));
+  TF_RETURN_IF_ERROR(request->SetResultBuffer(&output_buffer));
   TF_RETURN_WITH_CONTEXT_IF_ERROR(request->Send(), " when reading schema for ",
                                   FullTableName());
 

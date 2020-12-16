@@ -24,10 +24,6 @@ limitations under the License.
 #include <memory>
 #include "tensorflow/core/graph/graph.h"
 
-#ifdef _WIN32
-typedef unsigned int uint;
-#endif
-
 namespace tensorflow {
 // Interface to invoke the pass for unit test
 //

@@ -16,12 +16,13 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_XLA_TYPES_H_
 #define TENSORFLOW_COMPILER_XLA_TYPES_H_
 
-#include <Eigen/Core>
 #include <complex>
 
 #include "third_party/eigen3/Eigen/Core"
 #include "tensorflow/core/framework/numeric_types.h"
 #include "tensorflow/core/platform/types.h"
+
+#include <Eigen/Core>
 
 namespace xla {
 
@@ -40,15 +41,9 @@ using ::tensorflow::uint32;
 using ::tensorflow::uint64;
 
 using complex64 = std::complex<float>;
-using complex128 = std::complex<double>;
 
 using ::Eigen::half;
-}  // namespace xla
 
-// Alias namespace ::stream_executor as ::xla::se.
-namespace stream_executor {}
-namespace xla {
-namespace se = ::stream_executor;
 }  // namespace xla
 
 #endif  // TENSORFLOW_COMPILER_XLA_TYPES_H_

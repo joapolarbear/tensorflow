@@ -2,17 +2,16 @@
 #   Contains ops for evaluation metrics and summary statistics.
 #   APIs here are meant to evolve over time.
 
-load("//tensorflow:tensorflow.bzl", "py_test")
-
-package(
-    default_visibility = [
-        "//engedu/ml/tf_from_scratch:__pkg__",
-        "//tensorflow:internal",
-    ],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = [
+    "//engedu/ml/tf_from_scratch:__pkg__",
+    "//tensorflow:internal",
+])
+
+load("//tensorflow:tensorflow.bzl", "py_test")
 
 py_library(
     name = "metrics_py",
@@ -26,10 +25,6 @@ py_library(
         "python/ops/set_ops.py",
     ],
     srcs_version = "PY2AND3",
-    visibility = [
-        "//tensorflow:internal",
-        "//third_party/py/tf_slim:__subpackages__",
-    ],
     deps = [
         "//tensorflow/contrib/framework:framework_py",
         "//tensorflow/python:array_ops",
@@ -48,15 +43,12 @@ py_library(
         "//tensorflow/python:util",
         "//tensorflow/python:variable_scope",
         "//tensorflow/python:weights_broadcast_ops",
-        "//tensorflow/python/distribute:distribute_lib",
-        "//tensorflow/python/ops/distributions",
     ],
 )
 
 py_test(
     name = "classification_test",
     srcs = ["python/metrics/classification_test.py"],
-    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":metrics_py",
@@ -70,7 +62,6 @@ py_test(
     name = "histogram_ops_test",
     size = "medium",
     srcs = ["python/kernel_tests/histogram_ops_test.py"],
-    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":metrics_py",
@@ -85,8 +76,7 @@ py_test(
 py_test(
     name = "metric_ops_test",
     srcs = ["python/ops/metric_ops_test.py"],
-    python_version = "PY2",
-    shard_count = 30,
+    shard_count = 3,
     srcs_version = "PY2AND3",
     tags = ["noasan"],  # times out b/63678675
     deps = [
@@ -107,27 +97,13 @@ py_test(
     ],
 )
 
-py_test(
-    name = "metric_ops_large_test",
-    size = "large",
-    srcs = ["python/ops/metric_ops_large_test.py"],
-    python_version = "PY2",
-    srcs_version = "PY2AND3",
-    tags = ["noasan"],  # times out b/63678675
-    deps = [
-        ":metrics_py",
-        "//tensorflow/python:array_ops",
-        "//tensorflow/python:client_testlib",
-        "//tensorflow/python:data_flow_ops",
-        "//tensorflow/python:errors",
-        "//tensorflow/python:framework",
-        "//tensorflow/python:framework_for_generated_wrappers",
-        "//tensorflow/python:framework_test_lib",
-        "//tensorflow/python:math_ops",
-        "//tensorflow/python:platform_test",
-        "//tensorflow/python:random_ops",
-        "//tensorflow/python:sparse_tensor",
-        "//tensorflow/python:variables",
-        "//third_party/py/numpy",
-    ],
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
 )

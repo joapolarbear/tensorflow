@@ -24,7 +24,6 @@ from tensorflow.python.ops import check_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops.distributions import bijector
-from tensorflow.python.util import deprecation
 
 
 __all__ = [
@@ -48,17 +47,10 @@ class Weibull(bijector.Bijector):
   ```
   """
 
-  @deprecation.deprecated(
-      "2018-10-01",
-      "The TensorFlow Distributions library has moved to "
-      "TensorFlow Probability "
-      "(https://github.com/tensorflow/probability). You "
-      "should update all references to use `tfp.distributions` "
-      "instead of `tf.contrib.distributions`.",
-      warn_once=True)
   def __init__(self,
                scale=1.,
                concentration=1.,
+               event_ndims=0,
                validate_args=False,
                name="weibull"):
     """Instantiates the `Weibull` bijector.
@@ -70,6 +62,8 @@ class Weibull(bijector.Bijector):
       concentration: Positive Float-type `Tensor` that is the same dtype and is
         broadcastable with `scale`.
         This is `k` in `Y = g(X) = 1 - exp((-x / l) ** k)`.
+      event_ndims: Python scalar indicating the number of dimensions associated
+        with a particular draw from the distribution.
       validate_args: Python `bool` indicating whether arguments should be
         checked for correctness.
       name: Python `str` name given to ops managed by this object.
@@ -95,7 +89,7 @@ class Weibull(bijector.Bijector):
         ], self._concentration)
 
     super(Weibull, self).__init__(
-        forward_min_event_ndims=0,
+        event_ndims=event_ndims,
         validate_args=validate_args,
         name=name)
 
@@ -119,25 +113,29 @@ class Weibull(bijector.Bijector):
 
   def _inverse_log_det_jacobian(self, y):
     y = self._maybe_assert_valid_y(y)
-    return (
+    event_dims = self._event_dims_tensor(y)
+    return math_ops.reduce_sum(
         -math_ops.log1p(-y) +
         (1 / self.concentration - 1) * math_ops.log(-math_ops.log1p(-y)) +
-        math_ops.log(self.scale / self.concentration))
+        math_ops.log(self.scale / self.concentration),
+        axis=event_dims)
 
   def _forward_log_det_jacobian(self, x):
     x = self._maybe_assert_valid_x(x)
-    return (
+    event_dims = self._event_dims_tensor(x)
+    return math_ops.reduce_sum(
         -(x / self.scale) ** self.concentration +
         (self.concentration - 1) * math_ops.log(x) +
         math_ops.log(self.concentration) +
-        -self.concentration * math_ops.log(self.scale))
+        -self.concentration * math_ops.log(self.scale),
+        axis=event_dims)
 
   def _maybe_assert_valid_x(self, x):
     if not self.validate_args:
       return x
     is_valid = check_ops.assert_non_negative(
         x,
-        message="Forward transformation input must be at least 0.")
+        message="Forward transformation input must be at least {}.".format(0))
     return control_flow_ops.with_dependencies([is_valid], x)
 
   def _maybe_assert_valid_y(self, y):

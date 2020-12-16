@@ -51,8 +51,7 @@ struct BinaryFunctor<SYCLDevice, Functor, NDIMS, has_errors> {
   void operator()(const SYCLDevice& d, typename Functor::tout_type out,
                   typename Functor::tin_type in0,
                   typename Functor::tin_type in1, bool* error) {
-    To32Bit(out).device(d) =
-        To32Bit(in0).binaryExpr(To32Bit(in1), typename Functor::func());
+    To32Bit(out).device(d) = To32Bit(in0).binaryExpr(To32Bit(in1), typename Functor::func());
   }
 
   void Left(const SYCLDevice& d, typename Functor::tout_type out,
@@ -62,9 +61,7 @@ struct BinaryFunctor<SYCLDevice, Functor, NDIMS, has_errors> {
     constexpr int NumDims = Functor::tin_type::NumDimensions;
     static_assert(NumDims == 1, "Unexpected size");
     Eigen::Sizes<1> scalar_dim;
-    out.device(d) = scalar.reshape(scalar_dim)
-                        .broadcast(in.dimensions())
-                        .binaryExpr(in, Binary());
+    out.device(d) = scalar.reshape(scalar_dim).broadcast(in.dimensions()).binaryExpr(in, Binary());
   }
 
   void Right(const SYCLDevice& d, typename Functor::tout_type out,
@@ -74,8 +71,7 @@ struct BinaryFunctor<SYCLDevice, Functor, NDIMS, has_errors> {
     constexpr int NumDims = Functor::tin_type::NumDimensions;
     static_assert(NumDims == 1, "Unexpected size");
     Eigen::Sizes<1> scalar_dim;
-    out.device(d) = in.binaryExpr(
-        scalar.reshape(scalar_dim).broadcast(in.dimensions()), Binary());
+    out.device(d) = in.binaryExpr(scalar.reshape(scalar_dim).broadcast(in.dimensions()), Binary());
   }
 
   void BCast(const SYCLDevice& d,

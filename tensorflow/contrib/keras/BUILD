@@ -2,12 +2,11 @@
 #   Contains the Keras API (internal TensorFlow version).
 #   Note that tf.contrib.keras has been deprecated in favor of tf.keras.
 
-package(
-    default_visibility = ["//tensorflow:__subpackages__"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:__subpackages__"])
 
 py_library(
     name = "keras",
@@ -52,4 +51,16 @@ py_library(
     deps = [
         "//tensorflow/python/keras",
     ],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

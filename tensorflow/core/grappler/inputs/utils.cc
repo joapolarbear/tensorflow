@@ -14,10 +14,9 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/core/grappler/inputs/utils.h"
+#include "tensorflow/core/platform/env.h"
 
 #include <vector>
-
-#include "tensorflow/core/platform/env.h"
 
 namespace tensorflow {
 namespace grappler {
@@ -30,24 +29,16 @@ bool FilesExist(const std::set<string>& files) {
   return FilesExist(std::vector<string>(files.begin(), files.end()), nullptr);
 }
 
-bool FileExists(const string& file, Status* status) {
+bool FileExists(const std::string& file, Status* status) {
   *status = Env::Default()->FileExists(file);
   return status->ok();
 }
 
-Status ReadGraphDefFromFile(const string& graph_def_path, GraphDef* result) {
+Status ReadGraphDefFromFile(const std::string& graph_def_pbtxt_path,
+                            GraphDef* result) {
   Status status;
-  if (!ReadBinaryProto(Env::Default(), graph_def_path, result).ok()) {
-    return ReadTextProto(Env::Default(), graph_def_path, result);
-  }
-  return status;
-}
-
-Status ReadMetaGraphDefFromFile(const string& graph_def_path,
-                                MetaGraphDef* result) {
-  Status status;
-  if (!ReadBinaryProto(Env::Default(), graph_def_path, result).ok()) {
-    return ReadTextProto(Env::Default(), graph_def_path, result);
+  if (FileExists(graph_def_pbtxt_path, &status)) {
+    return ReadTextProto(Env::Default(), graph_def_pbtxt_path, result);
   }
   return status;
 }

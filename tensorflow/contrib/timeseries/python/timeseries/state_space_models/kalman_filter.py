@@ -18,6 +18,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from tensorflow.contrib import distributions
+
 from tensorflow.contrib.timeseries.python.timeseries import math_utils
 
 from tensorflow.python.framework import dtypes
@@ -135,10 +137,9 @@ class KalmanFilter(object):
     with ops.control_dependencies([non_negative_assert]):
       observation_covariance_cholesky = linalg_ops.cholesky(
           symmetrized_observation_covariance)
-    log_prediction_prob = math_utils.mvn_tril_log_prob(
-        loc=predicted_observation,
-        scale_tril=observation_covariance_cholesky,
-        x=observation)
+    log_prediction_prob = distributions.MultivariateNormalTriL(
+        predicted_observation, observation_covariance_cholesky).log_prob(
+            observation)
     (posterior_state,
      posterior_state_var) = self.posterior_from_prior_state(
          prior_state=estimated_state,
@@ -169,7 +170,7 @@ class KalmanFilter(object):
         math_ops.matmul(
             transition_matrices,
             prior_state[..., None]),
-        axis=[-1])
+        squeeze_dims=[-1])
     return advanced_state
 
   def predict_state_var(
@@ -253,7 +254,7 @@ class KalmanFilter(object):
             kalman_gain_transposed,
             array_ops.expand_dims(residual, -1),
             adjoint_a=True),
-        axis=[-1])
+        squeeze_dims=[-1])
     gain_obs = math_ops.matmul(
         kalman_gain_transposed, observation_model, adjoint_a=True)
     identity_extradim = linalg_ops.eye(
@@ -331,7 +332,7 @@ class KalmanFilter(object):
             array_ops.expand_dims(state_mean, 1),
             observation_model,
             adjoint_b=True),
-        axis=[1])
+        squeeze_dims=[1])
     observed_var = math_ops.matmul(
         math_ops.matmul(observation_model, state_var),
         observation_model,

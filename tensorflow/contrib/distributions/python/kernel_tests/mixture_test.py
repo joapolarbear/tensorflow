@@ -107,7 +107,7 @@ def _test_capture_normal_sample_outputs():
   ds.Normal._call_sample_n = true_normal_call_sample_n
 
 
-def make_univariate_mixture(batch_shape, num_components, use_static_graph):
+def make_univariate_mixture(batch_shape, num_components):
   batch_shape = ops.convert_to_tensor(batch_shape, dtypes.int32)
   logits = random_ops.random_uniform(
       array_ops.concat((batch_shape, [num_components]), axis=0),
@@ -119,11 +119,11 @@ def make_univariate_mixture(batch_shape, num_components, use_static_graph):
       for _ in range(num_components)
   ]
   cat = ds.Categorical(logits, dtype=dtypes.int32)
-  return ds.Mixture(cat, components, use_static_graph=use_static_graph)
+  return ds.Mixture(cat, components)
 
 
 def make_multivariate_mixture(batch_shape, num_components, event_shape,
-                              use_static_graph, batch_shape_tensor=None):
+                              batch_shape_tensor=None):
   if batch_shape_tensor is None:
     batch_shape_tensor = batch_shape
   batch_shape_tensor = ops.convert_to_tensor(batch_shape_tensor, dtypes.int32)
@@ -145,17 +145,15 @@ def make_multivariate_mixture(batch_shape, num_components, event_shape,
         loc=loc, scale_diag=scale_diag)
   components = [create_component() for _ in range(num_components)]
   cat = ds.Categorical(logits, dtype=dtypes.int32)
-  return ds.Mixture(cat, components, use_static_graph=use_static_graph)
+  return ds.Mixture(cat, components)
 
 
 class MixtureTest(test.TestCase):
-  use_static_graph = False
 
   def testShapes(self):
-    with self.cached_session():
+    with self.test_session():
       for batch_shape in ([], [1], [2, 3, 4]):
-        dist = make_univariate_mixture(batch_shape, num_components=10,
-                                       use_static_graph=self.use_static_graph)
+        dist = make_univariate_mixture(batch_shape, num_components=10)
         self.assertAllEqual(batch_shape, dist.batch_shape)
         self.assertAllEqual(batch_shape, dist.batch_shape_tensor().eval())
         self.assertAllEqual([], dist.event_shape)
@@ -163,8 +161,7 @@ class MixtureTest(test.TestCase):
 
         for event_shape in ([1], [2]):
           dist = make_multivariate_mixture(
-              batch_shape, num_components=10, event_shape=event_shape,
-              use_static_graph=self.use_static_graph)
+              batch_shape, num_components=10, event_shape=event_shape)
           self.assertAllEqual(batch_shape, dist.batch_shape)
           self.assertAllEqual(batch_shape, dist.batch_shape_tensor().eval())
           self.assertAllEqual(event_shape, dist.event_shape)
@@ -175,8 +172,7 @@ class MixtureTest(test.TestCase):
                                              r"cat.num_classes != len"):
       ds.Mixture(
           ds.Categorical([0.1, 0.5]),  # 2 classes
-          [ds.Normal(loc=1.0, scale=2.0)],
-          use_static_graph=self.use_static_graph)
+          [ds.Normal(loc=1.0, scale=2.0)])
     with self.assertRaisesWithPredicateMatch(
         ValueError, r"\(\) and \(2,\) are not compatible"):
       # The value error is raised because the batch shapes of the
@@ -189,18 +185,16 @@ class MixtureTest(test.TestCase):
                   loc=1.0, scale=2.0),  # scalar dist
               ds.Normal(
                   loc=[1.0, 1.0], scale=[2.0, 2.0])
-          ],
-          use_static_graph=self.use_static_graph)
+          ])
     with self.assertRaisesWithPredicateMatch(ValueError, r"Could not infer"):
       cat_logits = array_ops.placeholder(shape=[1, None], dtype=dtypes.float32)
       ds.Mixture(
           ds.Categorical(cat_logits),
           [ds.Normal(
-              loc=[1.0], scale=[2.0])],
-          use_static_graph=self.use_static_graph)
+              loc=[1.0], scale=[2.0])])
 
   def testBrokenShapesDynamic(self):
-    with self.cached_session():
+    with self.test_session():
       d0_param = array_ops.placeholder(dtype=dtypes.float32)
       d1_param = array_ops.placeholder(dtype=dtypes.float32)
       d = ds.Mixture(
@@ -209,48 +203,39 @@ class MixtureTest(test.TestCase):
                   loc=d0_param, scale=d0_param), ds.Normal(
                       loc=d1_param, scale=d1_param)
           ],
-          validate_args=True,
-          use_static_graph=self.use_static_graph)
-
-      if self.use_static_graph:
-        error_string = r"Shapes of all inputs must match"
-      else:
-        error_string = r"batch shape must match"
-
-      with self.assertRaisesOpError(error_string):
+          validate_args=True)
+      with self.assertRaisesOpError(r"batch shape must match"):
         d.sample().eval(feed_dict={d0_param: [2.0, 3.0], d1_param: [1.0]})
-      with self.assertRaisesOpError(error_string):
+      with self.assertRaisesOpError(r"batch shape must match"):
         d.sample().eval(feed_dict={d0_param: [2.0, 3.0], d1_param: 1.0})
 
   def testBrokenTypes(self):
     with self.assertRaisesWithPredicateMatch(TypeError, "Categorical"):
-      ds.Mixture(None, [], use_static_graph=self.use_static_graph)
+      ds.Mixture(None, [])
     cat = ds.Categorical([0.3, 0.2])
     # components must be a list of distributions
     with self.assertRaisesWithPredicateMatch(
         TypeError, "all .* must be Distribution instances"):
-      ds.Mixture(cat, [None], use_static_graph=self.use_static_graph)
+      ds.Mixture(cat, [None])
     with self.assertRaisesWithPredicateMatch(TypeError, "same dtype"):
       ds.Mixture(
           cat, [
               ds.Normal(loc=[1.0], scale=[2.0]),
               ds.Normal(loc=[np.float16(1.0)],
                         scale=[np.float16(2.0)]),
-          ], use_static_graph=self.use_static_graph)
+          ])
     with self.assertRaisesWithPredicateMatch(ValueError, "non-empty list"):
-      ds.Mixture(ds.Categorical([0.3, 0.2]), None,
-                 use_static_graph=self.use_static_graph)
+      ds.Mixture(ds.Categorical([0.3, 0.2]), None)
 
     # TODO(ebrevdo): once distribution Domains have been added, add a
     # test to ensure that the domains of the distributions in a
     # mixture are checked for equivalence.
 
   def testMeanUnivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for batch_shape in ((), (2,), (2, 3)):
         dist = make_univariate_mixture(
-            batch_shape=batch_shape, num_components=2,
-            use_static_graph=self.use_static_graph)
+            batch_shape=batch_shape, num_components=2)
         mean = dist.mean()
         self.assertEqual(batch_shape, mean.get_shape())
 
@@ -268,11 +253,10 @@ class MixtureTest(test.TestCase):
         self.assertAllClose(true_mean, mean_value)
 
   def testMeanMultivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for batch_shape in ((), (2,), (2, 3)):
         dist = make_multivariate_mixture(
-            batch_shape=batch_shape, num_components=2, event_shape=(4,),
-            use_static_graph=self.use_static_graph)
+            batch_shape=batch_shape, num_components=2, event_shape=(4,))
         mean = dist.mean()
         self.assertEqual(batch_shape + (4,), mean.get_shape())
 
@@ -296,11 +280,10 @@ class MixtureTest(test.TestCase):
   def testStddevShapeUnivariate(self):
     num_components = 2
     # This is the same shape test which is done in 'testMeanUnivariate'.
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for batch_shape in ((), (2,), (2, 3)):
         dist = make_univariate_mixture(
-            batch_shape=batch_shape, num_components=num_components,
-            use_static_graph=self.use_static_graph)
+            batch_shape=batch_shape, num_components=num_components)
         dev = dist.stddev()
         self.assertEqual(batch_shape, dev.get_shape())
 
@@ -337,13 +320,12 @@ class MixtureTest(test.TestCase):
     num_components = 2
 
     # This is the same shape test which is done in 'testMeanMultivariate'.
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for batch_shape in ((), (2,), (2, 3)):
         dist = make_multivariate_mixture(
             batch_shape=batch_shape,
             num_components=num_components,
-            event_shape=(4,),
-            use_static_graph=self.use_static_graph)
+            event_shape=(4,))
         dev = dist.stddev()
         self.assertEqual(batch_shape + (4,), dev.get_shape())
 
@@ -389,17 +371,15 @@ class MixtureTest(test.TestCase):
                       scale=component_devs[0]),
             ds.Normal(loc=component_means[1],
                       scale=component_devs[1]),
-        ],
-        use_static_graph=self.use_static_graph)
+        ])
     mix_dev = mixture_dist.stddev()
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       actual_stddev = sess.run(mix_dev)
     self.assertAllClose(actual_stddev, ground_truth_stddev)
 
   def testProbScalarUnivariate(self):
-    with self.cached_session() as sess:
-      dist = make_univariate_mixture(batch_shape=[], num_components=2,
-                                     use_static_graph=self.use_static_graph)
+    with self.test_session() as sess:
+      dist = make_univariate_mixture(batch_shape=[], num_components=2)
       for x in [
           np.array(
               [1.0, 2.0], dtype=np.float32), np.array(
@@ -423,10 +403,9 @@ class MixtureTest(test.TestCase):
         self.assertAllClose(total_prob, p_x_value)
 
   def testProbScalarMultivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       dist = make_multivariate_mixture(
-          batch_shape=[], num_components=2, event_shape=[3],
-          use_static_graph=self.use_static_graph)
+          batch_shape=[], num_components=2, event_shape=[3])
       for x in [
           np.array(
               [[-1.0, 0.0, 1.0], [0.5, 1.0, -0.3]], dtype=np.float32), np.array(
@@ -452,9 +431,8 @@ class MixtureTest(test.TestCase):
         self.assertAllClose(total_prob, p_x_value)
 
   def testProbBatchUnivariate(self):
-    with self.cached_session() as sess:
-      dist = make_univariate_mixture(batch_shape=[2, 3], num_components=2,
-                                     use_static_graph=self.use_static_graph)
+    with self.test_session() as sess:
+      dist = make_univariate_mixture(batch_shape=[2, 3], num_components=2)
 
       for x in [
           np.random.randn(2, 3).astype(np.float32),
@@ -479,10 +457,9 @@ class MixtureTest(test.TestCase):
         self.assertAllClose(total_prob, p_x_value)
 
   def testProbBatchMultivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       dist = make_multivariate_mixture(
-          batch_shape=[2, 3], num_components=2, event_shape=[4],
-          use_static_graph=self.use_static_graph)
+          batch_shape=[2, 3], num_components=2, event_shape=[4])
 
       for x in [
           np.random.randn(2, 3, 4).astype(np.float32),
@@ -506,12 +483,11 @@ class MixtureTest(test.TestCase):
         self.assertAllClose(total_prob, p_x_value)
 
   def testSampleScalarBatchUnivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       num_components = 3
       batch_shape = []
       dist = make_univariate_mixture(
-          batch_shape=batch_shape, num_components=num_components,
-          use_static_graph=self.use_static_graph)
+          batch_shape=batch_shape, num_components=num_components)
       n = 4
       with _test_capture_normal_sample_outputs() as component_samples:
         samples = dist.sample(n, seed=123)
@@ -526,10 +502,7 @@ class MixtureTest(test.TestCase):
         which_c = np.where(cat_sample_values == c)[0]
         size_c = which_c.size
         # Scalar Batch univariate case: batch_size == 1, rank 1
-        if self.use_static_graph:
-          which_dist_samples = dist_sample_values[c][which_c]
-        else:
-          which_dist_samples = dist_sample_values[c][:size_c]
+        which_dist_samples = dist_sample_values[c][:size_c]
         self.assertAllClose(which_dist_samples, sample_values[which_c])
 
   # Test that sampling with the same seed twice gives the same results.
@@ -539,7 +512,7 @@ class MixtureTest(test.TestCase):
     mus = [-5.0, 0.0, 5.0, 4.0, 20.0]
     sigmas = [0.1, 5.0, 3.0, 0.2, 4.0]
 
-    with self.cached_session():
+    with self.test_session():
       n = 100
 
       random_seed.set_random_seed(654321)
@@ -549,8 +522,7 @@ class MixtureTest(test.TestCase):
       ]
       cat = ds.Categorical(
           logits, dtype=dtypes.int32, name="cat1")
-      dist1 = ds.Mixture(cat, components, name="mixture1",
-                         use_static_graph=self.use_static_graph)
+      dist1 = ds.Mixture(cat, components, name="mixture1")
       samples1 = dist1.sample(n, seed=123456).eval()
 
       random_seed.set_random_seed(654321)
@@ -560,18 +532,16 @@ class MixtureTest(test.TestCase):
       ]
       cat2 = ds.Categorical(
           logits, dtype=dtypes.int32, name="cat2")
-      dist2 = ds.Mixture(cat2, components2, name="mixture2",
-                         use_static_graph=self.use_static_graph)
+      dist2 = ds.Mixture(cat2, components2, name="mixture2")
       samples2 = dist2.sample(n, seed=123456).eval()
 
       self.assertAllClose(samples1, samples2)
 
   def testSampleScalarBatchMultivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       num_components = 3
       dist = make_multivariate_mixture(
-          batch_shape=[], num_components=num_components, event_shape=[2],
-          use_static_graph=self.use_static_graph)
+          batch_shape=[], num_components=num_components, event_shape=[2])
       n = 4
       with _test_capture_mvndiag_sample_outputs() as component_samples:
         samples = dist.sample(n, seed=123)
@@ -585,18 +555,14 @@ class MixtureTest(test.TestCase):
         which_c = np.where(cat_sample_values == c)[0]
         size_c = which_c.size
         # Scalar Batch multivariate case: batch_size == 1, rank 2
-        if self.use_static_graph:
-          which_dist_samples = dist_sample_values[c][which_c, :]
-        else:
-          which_dist_samples = dist_sample_values[c][:size_c, :]
+        which_dist_samples = dist_sample_values[c][:size_c, :]
         self.assertAllClose(which_dist_samples, sample_values[which_c, :])
 
   def testSampleBatchUnivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       num_components = 3
       dist = make_univariate_mixture(
-          batch_shape=[2, 3], num_components=num_components,
-          use_static_graph=self.use_static_graph)
+          batch_shape=[2, 3], num_components=num_components)
       n = 4
       with _test_capture_normal_sample_outputs() as component_samples:
         samples = dist.sample(n, seed=123)
@@ -610,17 +576,13 @@ class MixtureTest(test.TestCase):
         which_c_s, which_c_b0, which_c_b1 = np.where(cat_sample_values == c)
         size_c = which_c_s.size
         # Batch univariate case: batch_size == [2, 3], rank 3
-        if self.use_static_graph:
-          which_dist_samples = dist_sample_values[c][which_c_s, which_c_b0,
-                                                     which_c_b1]
-        else:
-          which_dist_samples = dist_sample_values[c][range(size_c), which_c_b0,
-                                                     which_c_b1]
+        which_dist_samples = dist_sample_values[c][range(size_c), which_c_b0,
+                                                   which_c_b1]
         self.assertAllClose(which_dist_samples,
                             sample_values[which_c_s, which_c_b0, which_c_b1])
 
   def _testSampleBatchMultivariate(self, fully_known_batch_shape):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       num_components = 3
       if fully_known_batch_shape:
         batch_shape = [2, 3]
@@ -632,8 +594,7 @@ class MixtureTest(test.TestCase):
       dist = make_multivariate_mixture(
           batch_shape=batch_shape,
           num_components=num_components, event_shape=[4],
-          batch_shape_tensor=batch_shape_tensor,
-          use_static_graph=self.use_static_graph)
+          batch_shape_tensor=batch_shape_tensor)
       n = 5
       with _test_capture_mvndiag_sample_outputs() as component_samples:
         samples = dist.sample(n, seed=123)
@@ -656,12 +617,8 @@ class MixtureTest(test.TestCase):
         which_c_s, which_c_b0, which_c_b1 = np.where(cat_sample_values == c)
         size_c = which_c_s.size
         # Batch univariate case: batch_size == [2, 3], rank 4 (multivariate)
-        if self.use_static_graph:
-          which_dist_samples = dist_sample_values[c][which_c_s, which_c_b0,
-                                                     which_c_b1, :]
-        else:
-          which_dist_samples = dist_sample_values[c][range(size_c), which_c_b0,
-                                                     which_c_b1, :]
+        which_dist_samples = dist_sample_values[c][range(size_c), which_c_b0,
+                                                   which_c_b1, :]
         self.assertAllClose(which_dist_samples,
                             sample_values[which_c_s, which_c_b0, which_c_b1, :])
 
@@ -672,11 +629,10 @@ class MixtureTest(test.TestCase):
     self._testSampleBatchMultivariate(fully_known_batch_shape=False)
 
   def testEntropyLowerBoundMultivariate(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for batch_shape in ((), (2,), (2, 3)):
         dist = make_multivariate_mixture(
-            batch_shape=batch_shape, num_components=2, event_shape=(4,),
-            use_static_graph=self.use_static_graph)
+            batch_shape=batch_shape, num_components=2, event_shape=(4,))
         entropy_lower_bound = dist.entropy_lower_bound()
         self.assertEqual(batch_shape, entropy_lower_bound.get_shape())
 
@@ -717,8 +673,7 @@ class MixtureTest(test.TestCase):
     cat_tf = ds.Categorical(probs=mixture_weights)
     components_tf = [ds.Normal(loc=mu, scale=sigma)
                      for (mu, sigma) in zip(means, sigmas)]
-    mixture_tf = ds.Mixture(cat=cat_tf, components=components_tf,
-                            use_static_graph=self.use_static_graph)
+    mixture_tf = ds.Mixture(cat=cat_tf, components=components_tf)
 
     x_tensor = array_ops.placeholder(shape=(), dtype=dtypes.float32)
 
@@ -732,7 +687,7 @@ class MixtureTest(test.TestCase):
     x_cdf_tf = mixture_tf.cdf(x_tensor)
     x_log_cdf_tf = mixture_tf.log_cdf(x_tensor)
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for x_feed in xs_to_check:
         x_cdf_tf_result, x_log_cdf_tf_result = sess.run(
             [x_cdf_tf, x_log_cdf_tf], feed_dict={x_tensor: x_feed})
@@ -766,8 +721,7 @@ class MixtureTest(test.TestCase):
     cat_tf = ds.Categorical(probs=mixture_weights)
     components_tf = [ds.Normal(loc=mu, scale=sigma)
                      for (mu, sigma) in zip(means, sigmas)]
-    mixture_tf = ds.Mixture(cat=cat_tf, components=components_tf,
-                            use_static_graph=self.use_static_graph)
+    mixture_tf = ds.Mixture(cat=cat_tf, components=components_tf)
 
     x_tensor = array_ops.placeholder(shape=psize, dtype=dtypes.float32)
     xs_to_check = [
@@ -778,7 +732,7 @@ class MixtureTest(test.TestCase):
     x_cdf_tf = mixture_tf.cdf(x_tensor)
     x_log_cdf_tf = mixture_tf.log_cdf(x_tensor)
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       for x_feed in xs_to_check:
         x_cdf_tf_result, x_log_cdf_tf_result = sess.run(
             [x_cdf_tf, x_log_cdf_tf],
@@ -802,22 +756,16 @@ class MixtureTest(test.TestCase):
     Mixture's use of dynamic partition requires `random_gamma` correctly returns
     an empty `Tensor`.
     """
-    with self.cached_session():
+    with self.test_session():
       gm = ds.Mixture(
           cat=ds.Categorical(probs=[.3, .7]),
           components=[ds.Gamma(1., 2.),
-                      ds.Gamma(2., 1.)],
-          use_static_graph=self.use_static_graph)
+                      ds.Gamma(2., 1.)])
       x_ = gm.sample().eval()
       self.assertAllEqual([], x_.shape)
 
 
-class MixtureStaticSampleTest(MixtureTest):
-  use_static_graph = True
-
-
 class MixtureBenchmark(test.Benchmark):
-  use_static_graph = False
 
   def _runSamplingBenchmark(self, name, create_distribution, use_gpu,
                             num_components, batch_size, num_features,
@@ -863,7 +811,7 @@ class MixtureBenchmark(test.Benchmark):
       components = list(
           ds.MultivariateNormalDiag(
               loc=mu, scale_diag=sigma) for (mu, sigma) in zip(mus, sigmas))
-      return ds.Mixture(cat, components, use_static_graph=self.use_static_graph)
+      return ds.Mixture(cat, components)
 
     for use_gpu in False, True:
       if use_gpu and not test.is_gpu_available():
@@ -905,7 +853,7 @@ class MixtureBenchmark(test.Benchmark):
           ds.MultivariateNormalTriL(
               loc=mu, scale_tril=linalg_ops.cholesky(sigma))
           for (mu, sigma) in zip(mus, sigmas))
-      return ds.Mixture(cat, components, use_static_graph=self.use_static_graph)
+      return ds.Mixture(cat, components)
 
     for use_gpu in False, True:
       if use_gpu and not test.is_gpu_available():
@@ -922,10 +870,6 @@ class MixtureBenchmark(test.Benchmark):
                   batch_size=batch_size,
                   num_features=num_features,
                   sample_size=sample_size)
-
-
-class MixtureStaticSampleBenchmark(MixtureBenchmark):
-  use_static_graph = True
 
 
 if __name__ == "__main__":

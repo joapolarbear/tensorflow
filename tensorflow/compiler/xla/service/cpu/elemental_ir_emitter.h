@@ -31,18 +31,16 @@ class CpuElementalIrEmitter : public ElementalIrEmitter {
  public:
   CpuElementalIrEmitter(const HloModuleConfig& module_config,
                         IrEmitter* ir_emitter, llvm::Module* module)
-      : ElementalIrEmitter(module_config, module, ir_emitter->b()),
+      : ElementalIrEmitter(module_config, module, ir_emitter->ir_builder()),
         ir_emitter_(ir_emitter) {}
 
   llvm_ir::ElementGenerator MakeElementGenerator(
       const HloInstruction* hlo,
-      const HloToElementGeneratorMap& operand_to_generator) override;
+      const HloToElementGeneratorMap& operand_to_generator) const override;
 
  protected:
-  StatusOr<llvm::Value*> EmitAtan2(PrimitiveType prim_type, llvm::Value* lhs,
-                                   llvm::Value* rhs) override;
-  StatusOr<llvm::Value*> EmitTanh(PrimitiveType prim_type,
-                                  llvm::Value* value) override;
+  StatusOr<llvm::Value*> EmitFloatUnaryOp(
+      const HloInstruction* op, llvm::Value* operand_value) const override;
 
   IrEmitter* ir_emitter_;
 };

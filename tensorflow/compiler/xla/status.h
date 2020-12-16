@@ -21,7 +21,7 @@ limitations under the License.
 
 namespace xla {
 
-using tensorflow::Status;  // TENSORFLOW_STATUS_OK
+using tensorflow::Status;
 
 }  // namespace xla
 

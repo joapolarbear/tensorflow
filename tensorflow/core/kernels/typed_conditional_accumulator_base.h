@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_
-#define TENSORFLOW_CORE_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_
+#ifndef TENSORFLOW_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_
+#define TENSORFLOW_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_
 
 #include "tensorflow/core/kernels/conditional_accumulator_base.h"
 
@@ -35,9 +35,8 @@ class TypedConditionalAccumulatorBase : public ConditionalAccumulatorBase {
  public:
   TypedConditionalAccumulatorBase(const DataType& dtype,
                                   const PartialTensorShape& shape,
-                                  const string& name,
-                                  const string& reduction_type)
-      : ConditionalAccumulatorBase(dtype, shape, name, reduction_type) {}
+                                  const string& name)
+      : ConditionalAccumulatorBase(dtype, shape, name) {}
 
   /**
    * Attempts to add a gradient to the accumulator. An ApplyGrad attempt is
@@ -92,4 +91,4 @@ class TypedConditionalAccumulatorBase : public ConditionalAccumulatorBase {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_
+#endif  // TENSORFLOW_KERNELS_TYPED_CONDITIONAL_ACCUMULATOR_BASE_H_

@@ -22,11 +22,6 @@ Usage: python ./rnn_ptb.py --data-path=<path_to_dataset>
 Penn Treebank (PTB) dataset from:
 http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 import os
 import sys
@@ -38,26 +33,22 @@ import tensorflow as tf
 from tensorflow.contrib.cudnn_rnn.python.layers import cudnn_rnn
 from tensorflow.contrib.eager.python import tfe
 
-layers = tf.keras.layers
 
-
-class RNN(tf.keras.Model):
+class RNN(tfe.Network):
   """A static RNN.
 
-  Similar to tf.compat.v1.nn.static_rnn, implemented as a class.
+  Similar to tf.nn.static_rnn, implemented as a tf.layer.Layer.
   """
 
   def __init__(self, hidden_dim, num_layers, keep_ratio):
     super(RNN, self).__init__()
     self.keep_ratio = keep_ratio
-    self.cells = tf.contrib.checkpoint.List([
-        tf.nn.rnn_cell.BasicLSTMCell(num_units=hidden_dim)
-        for _ in range(num_layers)
-    ])
+    for _ in range(num_layers):
+      self.track_layer(tf.nn.rnn_cell.BasicLSTMCell(num_units=hidden_dim))
 
   def call(self, input_seq, training):
     batch_size = int(input_seq.shape[1])
-    for c in self.cells:
+    for c in self.layers:
       state = c.zero_state(batch_size, tf.float32)
       outputs = []
       input_seq = tf.unstack(input_seq, num=int(input_seq.shape[0]), axis=0)
@@ -68,14 +59,10 @@ class RNN(tf.keras.Model):
       input_seq = tf.stack(outputs, axis=0)
       if training:
         input_seq = tf.nn.dropout(input_seq, self.keep_ratio)
-    # Returning a list instead of a single tensor so that the line:
-    # y = self.rnn(y, ...)[0]
-    # in PTBModel.call works for both this RNN and CudnnLSTM (which returns a
-    # tuple (output, output_states).
-    return [input_seq]
+    return input_seq, None
 
 
-class Embedding(layers.Layer):
+class Embedding(tf.layers.Layer):
   """An Embedding layer."""
 
   def __init__(self, vocab_size, embedding_dim, **kwargs):
@@ -95,9 +82,8 @@ class Embedding(layers.Layer):
     return tf.nn.embedding_lookup(self.embedding, x)
 
 
-# pylint: disable=not-callable
-class PTBModel(tf.keras.Model):
-  """LSTM for word language modeling.
+class PTBModel(tfe.Network):
+  """LSTM for word language modelling.
 
   Model described in:
   (Zaremba, et. al.) Recurrent Neural Network Regularization
@@ -118,17 +104,20 @@ class PTBModel(tf.keras.Model):
 
     self.keep_ratio = 1 - dropout_ratio
     self.use_cudnn_rnn = use_cudnn_rnn
-    self.embedding = Embedding(vocab_size, embedding_dim)
+    self.embedding = self.track_layer(Embedding(vocab_size, embedding_dim))
 
     if self.use_cudnn_rnn:
       self.rnn = cudnn_rnn.CudnnLSTM(
           num_layers, hidden_dim, dropout=dropout_ratio)
     else:
       self.rnn = RNN(hidden_dim, num_layers, self.keep_ratio)
+    self.track_layer(self.rnn)
 
-    self.linear = layers.Dense(
-        vocab_size, kernel_initializer=tf.random_uniform_initializer(-0.1, 0.1))
-    self._output_shape = [-1, hidden_dim]
+    self.linear = self.track_layer(
+        tf.layers.Dense(
+            vocab_size,
+            kernel_initializer=tf.random_uniform_initializer(-0.1, 0.1)))
+    self._output_shape = [-1, embedding_dim]
 
   def call(self, input_seq, training):
     """Run the forward pass of PTBModel.
@@ -142,7 +131,7 @@ class PTBModel(tf.keras.Model):
     y = self.embedding(input_seq)
     if training:
       y = tf.nn.dropout(y, self.keep_ratio)
-    y = self.rnn(y, training=training)[0]
+    y, _ = self.rnn(y, training=training)
     return self.linear(tf.reshape(y, self._output_shape))
 
 
@@ -154,7 +143,7 @@ def clip_gradients(grads_and_vars, clip_ratio):
 
 def loss_fn(model, inputs, targets, training):
   labels = tf.reshape(targets, [-1])
-  outputs = model(inputs, training=training)
+  outputs = model(inputs, training)
   return tf.reduce_mean(
       tf.nn.sparse_softmax_cross_entropy_with_logits(
           labels=labels, logits=outputs))
@@ -220,7 +209,7 @@ class Datasets(object):
     """Load the Penn Treebank dataset.
 
     Args:
-      path: Path to the data/ directory of the dataset from Tomas Mikolov's
+      path: Path to the data/ directory of the dataset from from Tomas Mikolov's
         webpage - http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
     """
 
@@ -296,7 +285,7 @@ def test_model(use_cudnn_rnn):
 
 
 def main(_):
-  tf.enable_eager_execution()
+  tfe.enable_eager_execution()
 
   if not FLAGS.data_path:
     raise ValueError("Must specify --data-path")
@@ -307,37 +296,32 @@ def main(_):
   have_gpu = tfe.num_gpus() > 0
   use_cudnn_rnn = not FLAGS.no_use_cudnn_rnn and have_gpu
 
-  with tf.device("/device:GPU:0" if have_gpu else None):
-    # Make learning_rate a Variable so it can be included in the checkpoint
-    # and we can resume training with the last saved learning_rate.
-    learning_rate = tf.Variable(20.0, name="learning_rate")
-    model = PTBModel(corpus.vocab_size(), FLAGS.embedding_dim,
-                     FLAGS.hidden_dim, FLAGS.num_layers, FLAGS.dropout,
-                     use_cudnn_rnn)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-    checkpoint = tf.train.Checkpoint(
-        learning_rate=learning_rate, model=model,
-        # GradientDescentOptimizer has no state to checkpoint, but noting it
-        # here lets us swap in an optimizer that does.
-        optimizer=optimizer)
-    # Restore existing variables now (learning_rate), and restore new variables
-    # on creation if a checkpoint exists.
-    checkpoint.restore(tf.train.latest_checkpoint(FLAGS.logdir))
-    sys.stderr.write("learning_rate=%f\n" % learning_rate.numpy())
+  with tfe.restore_variables_on_create(
+      tf.train.latest_checkpoint(FLAGS.logdir)):
+    with tf.device("/device:GPU:0" if have_gpu else None):
+      # Make learning_rate a Variable so it can be included in the checkpoint
+      # and we can resume training with the last saved learning_rate.
+      learning_rate = tfe.Variable(20.0, name="learning_rate")
+      sys.stderr.write("learning_rate=%f\n" % learning_rate.numpy())
+      model = PTBModel(corpus.vocab_size(), FLAGS.embedding_dim,
+                       FLAGS.hidden_dim, FLAGS.num_layers, FLAGS.dropout,
+                       use_cudnn_rnn)
+      optimizer = tf.train.GradientDescentOptimizer(learning_rate)
 
-    best_loss = None
-    for _ in range(FLAGS.epoch):
-      train(model, optimizer, train_data, FLAGS.seq_len, FLAGS.clip)
-      eval_loss = evaluate(model, eval_data)
-      if not best_loss or eval_loss < best_loss:
-        if FLAGS.logdir:
-          checkpoint.save(os.path.join(FLAGS.logdir, "ckpt"))
-        best_loss = eval_loss
-      else:
-        learning_rate.assign(learning_rate / 4.0)
-        sys.stderr.write("eval_loss did not reduce in this epoch, "
-                         "changing learning rate to %f for the next epoch\n" %
-                         learning_rate.numpy())
+      best_loss = None
+      for _ in range(FLAGS.epoch):
+        train(model, optimizer, train_data, FLAGS.seq_len, FLAGS.clip)
+        eval_loss = evaluate(model, eval_data)
+        if not best_loss or eval_loss < best_loss:
+          if FLAGS.logdir:
+            tfe.Saver(model.trainable_weights + [learning_rate]).save(
+                os.path.join(FLAGS.logdir, "ckpt"))
+          best_loss = eval_loss
+        else:
+          learning_rate.assign(learning_rate / 4.0)
+          sys.stderr.write("eval_loss did not reduce in this epoch, "
+                           "changing learning rate to %f for the next epoch\n" %
+                           learning_rate.numpy())
 
 
 if __name__ == "__main__":
@@ -350,7 +334,8 @@ if __name__ == "__main__":
       "http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz")
   parser.add_argument(
       "--logdir", type=str, default="", help="Directory for checkpoint.")
-  parser.add_argument("--epoch", type=int, default=20, help="Number of epochs.")
+  parser.add_argument(
+      "--epoch", type=int, default=20, help="Number of epoches.")
   parser.add_argument("--batch-size", type=int, default=20, help="Batch size.")
   parser.add_argument(
       "--seq-len", type=int, default=35, help="Sequence length.")

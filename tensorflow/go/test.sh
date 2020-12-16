@@ -40,9 +40,8 @@ fi
 
 # Setup a GOPATH that includes just the TensorFlow Go API.
 export GOPATH="${TEST_TMPDIR}/go"
-export GOCACHE="${TEST_TMPDIR}/cache"
 mkdir -p "${GOPATH}/src/github.com/tensorflow"
-ln -s -f "${PWD}" "${GOPATH}/src/github.com/tensorflow/tensorflow"
+ln -s "${PWD}" "${GOPATH}/src/github.com/tensorflow/tensorflow"
 
 # Ensure that the TensorFlow C library is accessible to the
 # linker at build and run time.
@@ -64,9 +63,6 @@ then
   else
     export DYLD_LIBRARY_PATH="${PWD}/tensorflow:${DYLD_LIBRARY_PATH}"
   fi
-else 
-  echo "Only support Linux/Darwin, System $OS is not supported"
-  exit 1
 fi
 
 # Document the Go version and run tests

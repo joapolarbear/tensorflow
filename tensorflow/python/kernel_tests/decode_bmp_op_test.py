@@ -20,6 +20,7 @@ from __future__ import print_function
 
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import errors_impl
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import image_ops
 from tensorflow.python.platform import test
@@ -60,8 +61,8 @@ class DecodeBmpOpTest(test.TestCase):
     img_in = constant_op.constant(byte_string, dtype=dtypes.string)
     decode = array_ops.squeeze(image_ops.decode_bmp(img_in))
 
-    with self.cached_session():
-      decoded = self.evaluate(decode)
+    with self.test_session():
+      decoded = decode.eval()
       self.assertAllEqual(decoded, img_bytes)
 
   def testGrayscale(self):
@@ -135,8 +136,8 @@ class DecodeBmpOpTest(test.TestCase):
     img_in = constant_op.constant(byte_string, dtype=dtypes.string)
     decode = image_ops.decode_bmp(img_in)
 
-    with self.cached_session():
-      decoded = self.evaluate(decode)
+    with self.test_session():
+      decoded = decode.eval()
       self.assertAllEqual(decoded, img_bytes)
 
 

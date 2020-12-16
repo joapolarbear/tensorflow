@@ -91,10 +91,10 @@ void ParseSizes(OpKernelContext* context, const std::vector<int32>& strides,
                                       filter.shape().DebugString()));
   const int filter_rows = filter.dim_size(0);
   const int filter_cols = filter.dim_size(1);
-  OP_REQUIRES(context, depth == filter.dim_size(2),
-              errors::InvalidArgument(
-                  "input and filter must have the same depth: ", depth, " vs ",
-                  filter.dim_size(2)));
+  OP_REQUIRES(
+      context, depth == filter.dim_size(2),
+      errors::InvalidArgument("input and filter must have the same depth: ",
+                              depth, " vs ", filter.dim_size(2)));
 
   // Effective filter size, after introducing rate - 1 zeros between each
   // non-zero filter element.
@@ -234,11 +234,10 @@ class DilationBackpropInputOp : public OpKernel {
     // [ batch, out_rows, out_cols, depth ]
     const int batch = input.dim_size(0);
     const int depth = input.dim_size(3);
-    OP_REQUIRES(context,
-                batch == out_backprop.dim_size(0) &&
-                    out_rows == out_backprop.dim_size(1) &&
-                    out_cols == out_backprop.dim_size(2) &&
-                    depth == out_backprop.dim_size(3),
+    OP_REQUIRES(context, batch == out_backprop.dim_size(0) &&
+                             out_rows == out_backprop.dim_size(1) &&
+                             out_cols == out_backprop.dim_size(2) &&
+                             depth == out_backprop.dim_size(3),
                 errors::InvalidArgument("out_backprop has incompatible size."));
 
     // The computed in_backprop has the same dimensions as the input:
@@ -354,11 +353,10 @@ class DilationBackpropFilterOp : public OpKernel {
     // [ batch, out_rows, out_cols, depth ]
     const int batch = input.dim_size(0);
     const int depth = input.dim_size(3);
-    OP_REQUIRES(context,
-                batch == out_backprop.dim_size(0) &&
-                    out_rows == out_backprop.dim_size(1) &&
-                    out_cols == out_backprop.dim_size(2) &&
-                    depth == out_backprop.dim_size(3),
+    OP_REQUIRES(context, batch == out_backprop.dim_size(0) &&
+                             out_rows == out_backprop.dim_size(1) &&
+                             out_cols == out_backprop.dim_size(2) &&
+                             depth == out_backprop.dim_size(3),
                 errors::InvalidArgument("out_backprop has incompatible size."));
 
     // The computed filter_backprop has the same dimensions as the filter:
@@ -467,7 +465,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER);
 
 #undef REGISTER
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define REGISTER(T)                                                 \
   REGISTER_KERNEL_BUILDER(                                          \
@@ -488,6 +486,6 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER);
 
 #undef REGISTER
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 }  // namespace tensorflow

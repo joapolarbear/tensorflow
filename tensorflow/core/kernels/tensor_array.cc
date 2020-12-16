@@ -41,7 +41,7 @@ namespace tensor_array {
 TF_CALL_NUMBER_TYPES(TENSOR_ARRAY_WRITE_OR_ADD_CPU)
 #undef TENSOR_ARRAY_WRITE_OR_ADD_CPU
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define TENSOR_ARRAY_WRITE_OR_ADD_GPU(T) TENSOR_ARRAY_WRITE_OR_ADD(GPUDevice, T)
 TF_CALL_GPU_NUMBER_TYPES(TENSOR_ARRAY_WRITE_OR_ADD_GPU);
@@ -49,7 +49,7 @@ TF_CALL_complex64(TENSOR_ARRAY_WRITE_OR_ADD_GPU);
 TF_CALL_complex128(TENSOR_ARRAY_WRITE_OR_ADD_GPU);
 #undef TENSOR_ARRAY_WRITE_OR_ADD_GPU
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #undef TENSOR_ARRAY_WRITE_OR_ADD
 
@@ -62,11 +62,10 @@ TF_CALL_complex128(TENSOR_ARRAY_WRITE_OR_ADD_GPU);
   }
 
 #define TENSOR_ARRAY_SET_ZERO_CPU(T) TENSOR_ARRAY_SET_ZERO(CPUDevice, T)
-TF_CALL_NUMBER_TYPES(TENSOR_ARRAY_SET_ZERO_CPU);
-TF_CALL_bool(TENSOR_ARRAY_SET_ZERO_CPU);
+TF_CALL_NUMBER_TYPES(TENSOR_ARRAY_SET_ZERO_CPU)
 #undef TENSOR_ARRAY_SET_ZERO_CPU
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define TENSOR_ARRAY_SET_ZERO_GPU(T) TENSOR_ARRAY_SET_ZERO(GPUDevice, T)
 TF_CALL_GPU_NUMBER_TYPES(TENSOR_ARRAY_SET_ZERO_GPU);
@@ -74,7 +73,7 @@ TF_CALL_complex64(TENSOR_ARRAY_SET_ZERO_GPU);
 TF_CALL_complex128(TENSOR_ARRAY_SET_ZERO_GPU);
 #undef TENSOR_ARRAY_SET_ZERO_GPU
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #undef TENSOR_ARRAY_SET_ZERO
 
@@ -82,8 +81,7 @@ TF_CALL_complex128(TENSOR_ARRAY_SET_ZERO_GPU);
 
 std::atomic<int64> TensorArray::tensor_array_counter{0};
 
-Status TensorArray::CopyShapesFrom(TensorArray* rhs,
-                                   const TensorShape* shape_to_prepend) {
+Status TensorArray::CopyShapesFrom(TensorArray* rhs) {
   mutex_lock l(mu_);
   mutex_lock l_rhs(rhs->mu_);
   TF_RETURN_IF_ERROR(LockedReturnIfClosed());
@@ -91,20 +89,15 @@ Status TensorArray::CopyShapesFrom(TensorArray* rhs,
   if (tensors_.size() != rhs->tensors_.size()) {
     return errors::InvalidArgument(
         "TensorArray sizes do not match during CopyShapesFrom: ",
-        handle_.vec<tstring>()(1), " has size ", tensors_.size(), " but rhs ",
-        rhs->handle_.vec<tstring>()(1), " has size ", rhs->tensors_.size());
+        handle_.vec<string>()(1), " has size ", tensors_.size(), " but rhs ",
+        rhs->handle_.vec<string>()(1), " has size ", rhs->tensors_.size());
   }
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     // Skip "soft copy" of indices which have not been written.
     if (!rhs->tensors_[i].written) continue;
 
     // Copy the shape over.
-    if (shape_to_prepend) {
-      tensors_[i].shape = *shape_to_prepend;
-      tensors_[i].shape.AppendShape(rhs->tensors_[i].shape);
-    } else {
-      tensors_[i].shape = rhs->tensors_[i].shape;
-    }
+    tensors_[i].shape = rhs->tensors_[i].shape;
     // Mark as written.  Reads will know that if written is true and
     // read is false, and cleared is false, to return zeros of the
     // appropriate shape.  Future aggregating writes will only use the shape

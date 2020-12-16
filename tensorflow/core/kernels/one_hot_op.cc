@@ -17,10 +17,9 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 #define EIGEN_USE_GPU
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #include "tensorflow/core/kernels/one_hot_op.h"
 
@@ -104,7 +103,7 @@ class OneHotOp : public OpKernel {
       for (int i = 0; i < axis; ++i) {
         prefix_dim_size *= indices_shape.dim_size(i);
       }
-      int64 suffix_dim_size = indices_shape.num_elements() / prefix_dim_size;
+      TI suffix_dim_size = indices_shape.num_elements() / prefix_dim_size;
 
       // Split indices into matrix of size prefix_dim_size x suffix_dim_size
       auto indices_t =
@@ -141,8 +140,7 @@ class OneHotOp : public OpKernel {
 
 TF_CALL_ALL_TYPES(REGISTER_ONE_HOT);
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
@@ -161,7 +159,6 @@ namespace functor {
   DECLARE_GPU_SPEC_INDEX(T, int64);
 
 TF_CALL_GPU_NUMBER_TYPES(DECLARE_GPU_SPEC);
-TF_CALL_bool(DECLARE_GPU_SPEC);
 TF_CALL_int32(DECLARE_GPU_SPEC);
 TF_CALL_int64(DECLARE_GPU_SPEC);
 
@@ -185,13 +182,12 @@ TF_CALL_int64(DECLARE_GPU_SPEC);
   REGISTER_ONE_HOT_GPU_INDEX(type, int64);
 
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_ONE_HOT_GPU);
-TF_CALL_bool(REGISTER_ONE_HOT_GPU);
 TF_CALL_int32(REGISTER_ONE_HOT_GPU);
 TF_CALL_int64(REGISTER_ONE_HOT_GPU);
 
 #undef REGISTER_ONE_HOT_GPU_INDEX
 #undef REGISTER_ONE_HOT_GPU
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 }  // namespace tensorflow

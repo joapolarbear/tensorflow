@@ -17,37 +17,35 @@ limitations under the License.
 
 #include <utility>
 
-#include "absl/memory/memory.h"
-#include "absl/strings/str_format.h"
 #include "tensorflow/compiler/xla/service/interpreter/executor.h"
+#include "tensorflow/compiler/xla/service/interpreter/platform_id.h"
 #include "tensorflow/stream_executor/device_options.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
+#include "tensorflow/stream_executor/lib/ptr_util.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/status_macros.h"
+#include "tensorflow/stream_executor/lib/stringprintf.h"
 #include "tensorflow/stream_executor/multi_platform_manager.h"
 #include "tensorflow/stream_executor/platform.h"
 
-namespace stream_executor {
+namespace se = ::perftools::gputools;
+namespace sep = ::perftools::gputools::interpreter;
+
+namespace perftools {
+namespace gputools {
 namespace interpreter {
 
-XlaInterpreterPlatform::XlaInterpreterPlatform(const string& name,
-                                               const Platform::Id& id)
-    : name_(name), id_(id) {}
+InterpreterPlatform::InterpreterPlatform() : name_("Interpreter") {}
 
-XlaInterpreterPlatform::~XlaInterpreterPlatform() {}
+InterpreterPlatform::~InterpreterPlatform() {}
 
-Platform::Id XlaInterpreterPlatform::id() const { return id_; }
+Platform::Id InterpreterPlatform::id() const { return kInterpreterPlatformId; }
 
-int XlaInterpreterPlatform::VisibleDeviceCount() const { return 1; }
+int InterpreterPlatform::VisibleDeviceCount() const { return 1; }
 
-const string& XlaInterpreterPlatform::Name() const { return name_; }
+const string& InterpreterPlatform::Name() const { return name_; }
 
-port::StatusOr<std::unique_ptr<DeviceDescription>>
-XlaInterpreterPlatform::DescriptionForDevice(int ordinal) const {
-  return XlaInterpreterExecutor::CreateDeviceDescription(ordinal);
-}
-
-port::StatusOr<StreamExecutor*> XlaInterpreterPlatform::ExecutorForDevice(
+port::StatusOr<StreamExecutor*> InterpreterPlatform::ExecutorForDevice(
     int ordinal) {
   StreamExecutorConfig config;
   config.ordinal = ordinal;
@@ -57,7 +55,7 @@ port::StatusOr<StreamExecutor*> XlaInterpreterPlatform::ExecutorForDevice(
 }
 
 port::StatusOr<StreamExecutor*>
-XlaInterpreterPlatform::ExecutorForDeviceWithPluginConfig(
+InterpreterPlatform::ExecutorForDeviceWithPluginConfig(
     int device_ordinal, const PluginConfig& plugin_config) {
   StreamExecutorConfig config;
   config.ordinal = device_ordinal;
@@ -66,54 +64,52 @@ XlaInterpreterPlatform::ExecutorForDeviceWithPluginConfig(
   return GetExecutor(config);
 }
 
-port::StatusOr<StreamExecutor*> XlaInterpreterPlatform::GetExecutor(
+port::StatusOr<StreamExecutor*> InterpreterPlatform::GetExecutor(
     const StreamExecutorConfig& config) {
   return executor_cache_.GetOrCreate(
       config, [&]() { return GetUncachedExecutor(config); });
 }
 
 port::StatusOr<std::unique_ptr<StreamExecutor>>
-XlaInterpreterPlatform::GetUncachedExecutor(
-    const StreamExecutorConfig& config) {
-  auto executor = absl::make_unique<StreamExecutor>(
-      this, absl::make_unique<XlaInterpreterExecutor>(config.plugin_config),
-      config.ordinal);
-  auto init_status = executor->Init(config.device_options);
+InterpreterPlatform::GetUncachedExecutor(const StreamExecutorConfig& config) {
+  auto executor = port::MakeUnique<StreamExecutor>(
+      this, port::MakeUnique<InterpreterExecutor>(config.plugin_config));
+  auto init_status = executor->Init(config.ordinal, config.device_options);
   if (!init_status.ok()) {
     return port::Status{
         port::error::INTERNAL,
-        absl::StrFormat(
+        port::Printf(
             "failed initializing StreamExecutor for device ordinal %d: %s",
-            config.ordinal, init_status.ToString())};
+            config.ordinal, init_status.ToString().c_str())};
   }
 
   return std::move(executor);
 }
 
-void XlaInterpreterPlatform::RegisterTraceListener(
+void InterpreterPlatform::RegisterTraceListener(
     std::unique_ptr<TraceListener> listener) {
   LOG(FATAL) << "not yet implemented: register executor trace listener";
 }
 
-void XlaInterpreterPlatform::UnregisterTraceListener(TraceListener* listener) {
+void InterpreterPlatform::UnregisterTraceListener(TraceListener* listener) {
   LOG(FATAL) << "not yet implemented: unregister executor trace listener";
 }
 
-static void InitializeXlaInterpreterPlatform() {
-  std::unique_ptr<Platform> platform(new XlaInterpreterPlatform);
-  SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
+static void InitializeInterpreterPlatform() {
+  std::unique_ptr<se::Platform> platform(new sep::InterpreterPlatform);
+  SE_CHECK_OK(se::MultiPlatformManager::RegisterPlatform(std::move(platform)));
 }
 
 }  // namespace interpreter
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
-REGISTER_MODULE_INITIALIZER(
-    interpreter_platform,
-    stream_executor::interpreter::InitializeXlaInterpreterPlatform());
+REGISTER_MODULE_INITIALIZER(interpreter_platform,
+                            sep::InitializeInterpreterPlatform());
+
+DECLARE_MODULE_INITIALIZER(multi_platform_manager);
 
 // Note that module initialization sequencing is not supported in the
 // open-source project, so this will be a no-op there.
 REGISTER_MODULE_INITIALIZER_SEQUENCE(interpreter_platform,
                                      multi_platform_manager);
-REGISTER_MODULE_INITIALIZER_SEQUENCE(multi_platform_manager_listener,
-                                     interpreter_platform);

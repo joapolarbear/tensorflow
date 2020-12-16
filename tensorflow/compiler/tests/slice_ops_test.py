@@ -18,18 +18,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.compiler.tests import xla_test
+from tensorflow.compiler.tests.xla_test import XLATestCase
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor_shape
 from tensorflow.python.ops import array_ops
 from tensorflow.python.platform import googletest
 
 
-class SliceTest(xla_test.XLATestCase):
+class SliceTest(XLATestCase):
 
   def test1D(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[10])
         with self.test_scope():
           o = array_ops.slice(i, [2], [4])
@@ -40,22 +39,9 @@ class SliceTest(xla_test.XLATestCase):
 
         self.assertAllEqual([2, 3, 4, 5], result)
 
-  def testZeroSlice(self):
-    for dtype in self.numeric_types:
-      with self.session():
-        i = array_ops.placeholder(dtype, shape=[2])
-        with self.test_scope():
-          o = array_ops.slice(i, [0], [0])
-        params = {
-            i: [0, 1],
-        }
-        result = o.eval(feed_dict=params)
-
-        self.assertAllEqual([], result)
-
   def test3D(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[3, 3, 10])
         with self.test_scope():
           o = array_ops.slice(i, [1, 2, 2], [1, 1, 4])
@@ -77,7 +63,7 @@ class SliceTest(xla_test.XLATestCase):
   def test3DWithDynamicBegin(self):
     """Tests a slice where the start offset is not known at compile time."""
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[3, 3, 10])
         begin = array_ops.placeholder(dtypes.int32, shape=[3])
         with self.test_scope():
@@ -101,7 +87,7 @@ class SliceTest(xla_test.XLATestCase):
   def test3DWithDynamicBeginAndNegativeSize(self):
     """Tests a slice where `begin` is fed dynamically and `size` contains -1."""
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[3, 3, 10])
         begin = array_ops.placeholder(dtypes.int32, shape=[3])
         with self.test_scope():
@@ -123,11 +109,11 @@ class SliceTest(xla_test.XLATestCase):
         self.assertAllEqual([[[1, 1, 1, 1], [6, 5, 4, 3]]], result)
 
 
-class StridedSliceTest(xla_test.XLATestCase):
+class StridedSliceTest(XLATestCase):
 
   def test1D(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[10])
         with self.test_scope():
           o = array_ops.strided_slice(i, [2], [6], [2])
@@ -140,7 +126,7 @@ class StridedSliceTest(xla_test.XLATestCase):
 
   def test1DNegativeStride(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[10])
         with self.test_scope():
           o = array_ops.strided_slice(i, [6], [2], [-2])
@@ -151,37 +137,9 @@ class StridedSliceTest(xla_test.XLATestCase):
 
         self.assertAllEqual([6, 4], result)
 
-  def test2DDegenerate(self):
-    for dtype in self.numeric_types:
-      with self.session():
-        i = array_ops.placeholder(dtype, shape=[2, 3])
-        with self.test_scope():
-          o = array_ops.strided_slice(i, [-1, 0], [0, 3])
-        params = {
-            i: [[0, 1, 2],
-                [3, 4, 5]]
-        }
-        result = o.eval(feed_dict=params)
-
-        self.assertEqual(tensor_shape.TensorShape((0, 3)), result.shape)
-
-  def test2DDegenerateNegativeStride(self):
-    for dtype in self.numeric_types:
-      with self.session():
-        i = array_ops.placeholder(dtype, shape=[2, 3])
-        with self.test_scope():
-          o = array_ops.strided_slice(i, [0, 0], [-1, 3], [-1, 1])
-        params = {
-            i: [[0, 1, 2],
-                [3, 4, 5]]
-        }
-        result = o.eval(feed_dict=params)
-
-        self.assertEqual(tensor_shape.TensorShape((0, 3)), result.shape)
-
   def test3D(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[3, 3, 10])
         with self.test_scope():
           o = array_ops.strided_slice(i, [0, 2, 2], [2, 3, 6], [1, 1, 2])
@@ -202,7 +160,7 @@ class StridedSliceTest(xla_test.XLATestCase):
 
   def test3DNegativeStride(self):
     for dtype in self.numeric_types:
-      with self.session():
+      with self.test_session():
         i = array_ops.placeholder(dtype, shape=[3, 4, 10])
         with self.test_scope():
           o = array_ops.strided_slice(i, [2, 2, 6], [0, 0, 2], [-1, -1, -2])

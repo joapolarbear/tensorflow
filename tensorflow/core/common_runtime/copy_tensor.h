@@ -28,11 +28,13 @@ namespace tensorflow {
 
 class CopyTensor {
  public:
-  typedef void (*CopyFunction)(
-      DeviceContext* send_dev_context, DeviceContext* recv_dev_context,
-      Device* src, Device* dst, const AllocatorAttributes src_alloc_attr,
-      const AllocatorAttributes dst_alloc_attr, const Tensor* input,
-      Tensor* output, int dev_to_dev_stream_index, StatusCallback done);
+  typedef void (*CopyFunction)(DeviceContext* send_dev_context,
+                               DeviceContext* recv_dev_context, Device* src,
+                               Device* dst,
+                               const AllocatorAttributes src_alloc_attr,
+                               const AllocatorAttributes dst_alloc_attr,
+                               const Tensor* input, Tensor* output,
+                               StatusCallback done);
 
   // Copies "input" to "output" between devices accessible to the
   // local process via some DMA-like method.  "edge_name" is the name
@@ -44,9 +46,7 @@ class CopyTensor {
                      DeviceContext* recv_dev_context, Device* src, Device* dst,
                      const AllocatorAttributes src_alloc_attr,
                      const AllocatorAttributes dst_alloc_attr,
-                     const Tensor* input, Tensor* output,
-                     int dev_to_dev_stream_index, StatusCallback done,
-                     bool sync_dst_compute = true);
+                     const Tensor* input, Tensor* output, StatusCallback done);
 
   // Object used to call Register() at static-initialization time.
   // Note: This should only ever be used as a global-static object; no stack
@@ -68,11 +68,6 @@ class CopyTensor {
                          DeviceType receiver_device_type,
                          CopyFunction copy_function);
 };
-
-void CopyDeviceToHost(const Tensor* input, Allocator* cpu_allocator,
-                      Allocator* out_allocator, StringPiece edge_name,
-                      Device* src, Tensor* output,
-                      DeviceContext* send_dev_context, StatusCallback done);
 
 }  // namespace tensorflow
 

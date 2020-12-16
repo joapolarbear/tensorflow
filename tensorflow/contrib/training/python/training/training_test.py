@@ -36,7 +36,6 @@ from tensorflow.python.ops.losses import losses
 from tensorflow.python.platform import gfile
 from tensorflow.python.platform import test
 from tensorflow.python.training import basic_session_run_hooks
-from tensorflow.python.training import checkpoint_management
 from tensorflow.python.training import gradient_descent
 from tensorflow.python.training import monitored_session
 from tensorflow.python.training import saver as saver_lib
@@ -62,7 +61,7 @@ class ClipGradsTest(test.TestCase):
     clipped_gradients_to_variables = training.clip_gradient_norms(
         gradients_to_variables, 3.0)
 
-    with self.cached_session() as session:
+    with self.test_session() as session:
       session.run(variables_lib2.global_variables_initializer())
       self.assertAlmostEqual(4.0, gradients_to_variables[0][0].eval())
       self.assertAlmostEqual(3.0, clipped_gradients_to_variables[0][0].eval())
@@ -75,7 +74,7 @@ class ClipGradsTest(test.TestCase):
     clipped_gradients_to_variables = training.clip_gradient_norms_fn(3.0)(
         gradients_to_variables)
 
-    with self.cached_session() as session:
+    with self.test_session() as session:
       session.run(variables_lib2.global_variables_initializer())
       self.assertAlmostEqual(4.0, gradients_to_variables[0][0].eval())
       self.assertAlmostEqual(3.0, clipped_gradients_to_variables[0][0].eval())
@@ -122,7 +121,7 @@ class CreateTrainOpTest(test.TestCase):
       moving_variance = variables_lib.get_variables_by_name('moving_variance')[
           0]
 
-      with self.cached_session() as session:
+      with self.test_session() as session:
         # Initialize all variables
         session.run(variables_lib2.global_variables_initializer())
         mean, variance = session.run([moving_mean, moving_variance])
@@ -155,7 +154,7 @@ class CreateTrainOpTest(test.TestCase):
       moving_variance = variables_lib.get_variables_by_name('moving_variance')[
           0]
 
-      with self.cached_session() as session:
+      with self.test_session() as session:
         # Initialize all variables
         session.run(variables_lib2.global_variables_initializer())
         mean, variance = session.run([moving_mean, moving_variance])
@@ -186,7 +185,7 @@ class CreateTrainOpTest(test.TestCase):
 
       global_step = variables_lib.get_or_create_global_step()
 
-      with self.cached_session() as session:
+      with self.test_session() as session:
         # Initialize all variables
         session.run(variables_lib2.global_variables_initializer())
 
@@ -209,7 +208,7 @@ class CreateTrainOpTest(test.TestCase):
 
       global_step = variables_lib.get_or_create_global_step()
 
-      with self.cached_session() as session:
+      with self.test_session() as session:
         # Initialize all variables
         session.run(variables_lib2.global_variables_initializer())
 
@@ -422,7 +421,7 @@ class TrainTest(test.TestCase):
       train_op = self.create_train_op()
 
       model_variables = variables_lib2.global_variables()
-      model_path = checkpoint_management.latest_checkpoint(logdir1)
+      model_path = saver_lib.latest_checkpoint(logdir1)
 
       assign_fn = variables_lib.assign_from_checkpoint_fn(
           model_path, model_variables)
@@ -535,7 +534,7 @@ class TrainTest(test.TestCase):
       train_biases = training.create_train_op(
           total_loss, optimizer, variables_to_train=[biases])
 
-      with self.cached_session() as session:
+      with self.test_session() as session:
         # Initialize the variables.
         session.run(variables_lib2.global_variables_initializer())
 

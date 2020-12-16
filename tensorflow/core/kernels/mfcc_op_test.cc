@@ -31,8 +31,8 @@ limitations under the License.
 #include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
-namespace ops {
-namespace {
+
+using namespace ops;  // NOLINT(build/namespaces)
 
 TEST(MfccOpTest, SimpleTest) {
   Scope root = Scope::DisabledShapeInferenceScope();
@@ -74,6 +74,4 @@ TEST(MfccOpTest, SimpleTest) {
       1e-3);
 }
 
-}  // namespace
-}  // namespace ops
 }  // namespace tensorflow

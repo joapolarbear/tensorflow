@@ -588,8 +588,7 @@ class Timeline(object):
       alloc_tensor_set = set()
       alloc_maxes[allocator] = AllocationMaximum(
           timestamp=0, num_bytes=0, tensors=set())
-      for time, num_bytes, name in sorted(
-          alloc_list, key=lambda allocation: allocation[0]):
+      for time, num_bytes, name in alloc_list:
         total_bytes += num_bytes
         if num_bytes < 0:
           alloc_tensor_set.discard(name)

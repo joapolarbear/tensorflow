@@ -20,7 +20,6 @@ from __future__ import print_function
 
 import os
 
-from tensorflow.python.framework import test_util
 from tensorflow.python.framework.errors_impl import NotFoundError
 from tensorflow.python.lib.io import tf_record
 from tensorflow.python.ops import data_flow_ops
@@ -29,11 +28,8 @@ from tensorflow.python.platform import test
 
 class RecordInputOpTest(test.TestCase):
 
-  def generateTestData(self,
-                       prefix,
-                       n,
-                       m,
-                       compression_type=tf_record.TFRecordCompressionType.NONE):
+  def generateTestData(self, prefix, n, m,
+      compression_type=tf_record.TFRecordCompressionType.NONE):
     options = tf_record.TFRecordOptions(compression_type)
     for i in range(n):
       f = os.path.join(self.get_temp_dir(), prefix + "." + str(i))
@@ -45,7 +41,7 @@ class RecordInputOpTest(test.TestCase):
     w.close()
 
   def testRecordInputSimple(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       self.generateTestData("basic", 1, 1)
 
       yield_op = data_flow_ops.RecordInput(
@@ -55,14 +51,11 @@ class RecordInputOpTest(test.TestCase):
           batch_size=1,
           name="record_input").get_yield_op()
 
-      self.assertEqual(self.evaluate(yield_op), b"0000000000")
+      self.assertEqual(sess.run(yield_op), b"0000000000")
 
   def testRecordInputSimpleGzip(self):
-    with self.cached_session() as sess:
-      self.generateTestData(
-          "basic",
-          1,
-          1,
+    with self.test_session() as sess:
+      self.generateTestData("basic", 1, 1,
           compression_type=tf_record.TFRecordCompressionType.GZIP)
 
       yield_op = data_flow_ops.RecordInput(
@@ -71,17 +64,14 @@ class RecordInputOpTest(test.TestCase):
           buffer_size=1,
           batch_size=1,
           name="record_input",
-          compression_type=tf_record.TFRecordCompressionType.GZIP).get_yield_op(
-          )
+          compression_type=
+              tf_record.TFRecordCompressionType.GZIP).get_yield_op()
 
-      self.assertEqual(self.evaluate(yield_op), b"0000000000")
+      self.assertEqual(sess.run(yield_op), b"0000000000")
 
   def testRecordInputSimpleZlib(self):
-    with self.cached_session() as sess:
-      self.generateTestData(
-          "basic",
-          1,
-          1,
+    with self.test_session() as sess:
+      self.generateTestData("basic", 1, 1,
           compression_type=tf_record.TFRecordCompressionType.ZLIB)
 
       yield_op = data_flow_ops.RecordInput(
@@ -90,17 +80,16 @@ class RecordInputOpTest(test.TestCase):
           buffer_size=1,
           batch_size=1,
           name="record_input",
-          compression_type=tf_record.TFRecordCompressionType.ZLIB).get_yield_op(
-          )
+          compression_type=
+              tf_record.TFRecordCompressionType.ZLIB).get_yield_op()
 
-      self.assertEqual(self.evaluate(yield_op), b"0000000000")
+      self.assertEqual(sess.run(yield_op), b"0000000000")
 
-  @test_util.run_deprecated_v1
   def testRecordInputEpochs(self):
     files = 100
     records_per_file = 100
     batches = 2
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       self.generateTestData("basic", files, records_per_file)
 
       records = data_flow_ops.RecordInput(
@@ -119,17 +108,16 @@ class RecordInputOpTest(test.TestCase):
       for _ in range(3):
         epoch_set = set()
         for _ in range(int(files * records_per_file / batches)):
-          op_list = self.evaluate(yield_op)
+          op_list = sess.run(yield_op)
           self.assertTrue(len(op_list) is batches)
           for r in op_list:
             self.assertTrue(r[0] not in epoch_set)
             epoch_set.add(r[0])
 
-  @test_util.run_deprecated_v1
   def testDoesNotDeadlock(self):
     # Iterate multiple times to cause deadlock if there is a chance it can occur
     for _ in range(30):
-      with self.cached_session() as sess:
+      with self.test_session() as sess:
         self.generateTestData("basic", 1, 1)
 
         records = data_flow_ops.RecordInput(
@@ -141,23 +129,21 @@ class RecordInputOpTest(test.TestCase):
 
         yield_op = records.get_yield_op()
         for _ in range(50):
-          self.evaluate(yield_op)
+          sess.run(yield_op)
 
-  @test_util.run_deprecated_v1
   def testEmptyGlob(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       record_input = data_flow_ops.RecordInput(file_pattern="foo")
       yield_op = record_input.get_yield_op()
-      self.evaluate(variables.global_variables_initializer())
+      sess.run(variables.global_variables_initializer())
       with self.assertRaises(NotFoundError):
-        self.evaluate(yield_op)
+        sess.run(yield_op)
 
-  @test_util.run_deprecated_v1
   def testBufferTooSmall(self):
     files = 10
     records_per_file = 10
     batches = 2
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       self.generateTestData("basic", files, records_per_file)
 
       records = data_flow_ops.RecordInput(
@@ -176,7 +162,7 @@ class RecordInputOpTest(test.TestCase):
       for _ in range(3):
         epoch_set = set()
         for _ in range(int(files * records_per_file / batches)):
-          op_list = self.evaluate(yield_op)
+          op_list = sess.run(yield_op)
           self.assertTrue(len(op_list) is batches)
           for r in op_list:
             self.assertTrue(r[0] not in epoch_set)

@@ -13,10 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_
-#define TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_
+#define THIRD_PARTY_TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_
 
-#include <cmath>
 #define EIGEN_USE_THREADS
 
 // This is a set of functions that standardizes how quantized values are
@@ -103,7 +102,7 @@ float QuantizedToFloat(T input, float range_min, float range_max) {
   // range_scale to a float, otherwise range_min_rounded might be slightly
   // different.
   const double range_min_rounded =
-      std::round(range_min / static_cast<float>(range_scale)) *
+      round(range_min / static_cast<float>(range_scale)) *
       static_cast<float>(range_scale);
   const double result = range_min_rounded + (offset_input * range_scale);
   return static_cast<float>(result);
@@ -171,8 +170,7 @@ struct QuantizedToFloatStruct {
         range_scale((range_max - range_min) / (number_of_steps - 1.0)),
         range_min_rounded(range_max == range_min
                               ? range_min
-                              : std::round(range_min / range_scale) *
-                                    range_scale) {}
+                              : round(range_min / range_scale) * range_scale) {}
 
   const float range_min;
   const float range_scale;
@@ -209,7 +207,7 @@ struct FloatToQuantizedStruct {
         range_scale(range_max == range_min
                         ? 0.0
                         : (number_of_steps - 1.0) / (range_max - range_min)),
-        range_min_scaled(std::round(range_min * range_scale)) {}
+        range_min_scaled(round(range_min * range_scale)) {}
 
   const float range_min;
   const float range_scale;
@@ -275,8 +273,8 @@ inline void RequantizeManyInNewRangeReference(const qint32* input, int64 count,
     const int64 offset_intermediate = fp_value - output_offset_fp;
     const int64 round_intermediate = offset_intermediate + rounding_delta;
     int64 quantized_int64 = round_intermediate >> fp_shift;
-    quantized_int64 = std::max(quantized_int64, int64{0});
-    quantized_int64 = std::min(quantized_int64, int64{255});
+    quantized_int64 = std::max(quantized_int64, 0LL);
+    quantized_int64 = std::min(quantized_int64, 255LL);
     output[index] = static_cast<quint8>(static_cast<int32>(quantized_int64));
   }
 }
@@ -958,4 +956,4 @@ class TensorflowGemmContext : public gemmlowp::MultiThreadGemmContextBase {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CORE_KERNELS_QUANTIZATION_UTILS_H_

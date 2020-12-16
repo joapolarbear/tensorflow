@@ -13,8 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "tensorflow/compiler/xla/client/computation_builder.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
+#include "tensorflow/compiler/xla/service/computation_tracker.h"
 #include "tensorflow/compiler/xla/service/local_service.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
 #include "tensorflow/compiler/xla/tests/local_client_test_base.h"
@@ -29,17 +30,17 @@ class HloMetadataTest : public LocalClientTestBase {
     metadata_.set_op_name("my_sum_op");
   }
 
-  void BuildAddComputation(XlaBuilder* builder) {
-    auto x = Parameter(builder, 0, ShapeUtil::MakeShape(F32, {}), "x");
-    auto y = Parameter(builder, 1, ShapeUtil::MakeShape(F32, {}), "y");
-    Add(x, y);
+  void BuildAddComputation(ComputationBuilder* builder) {
+    auto x = builder->Parameter(0, ShapeUtil::MakeShape(F32, {}), "x");
+    auto y = builder->Parameter(1, ShapeUtil::MakeShape(F32, {}), "y");
+    builder->Add(x, y);
   }
 
   OpMetadata metadata_;
 };
 
 TEST_F(HloMetadataTest, MetadataPropagation) {
-  XlaBuilder builder("add");
+  ComputationBuilder builder(local_client_, "add");
   builder.SetOpMetadata(metadata_);
   BuildAddComputation(&builder);
   builder.ClearOpMetadata();
@@ -60,7 +61,7 @@ TEST_F(HloMetadataTest, MetadataPropagation) {
 }
 
 TEST_F(HloMetadataTest, MetadataClearing) {
-  XlaBuilder builder("add");
+  ComputationBuilder builder(local_client_, "add");
   builder.SetOpMetadata(metadata_);
   // Some other pretend computation here.
   builder.ClearOpMetadata();

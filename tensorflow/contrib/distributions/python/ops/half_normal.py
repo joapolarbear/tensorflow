@@ -31,7 +31,6 @@ from tensorflow.python.ops import nn
 from tensorflow.python.ops import random_ops
 from tensorflow.python.ops.distributions import distribution
 from tensorflow.python.ops.distributions import special_math
-from tensorflow.python.util import deprecation
 
 
 __all__ = [
@@ -66,18 +65,15 @@ class HalfNormal(distribution.Distribution):
   Examples of initialization of one or a batch of distributions.
 
   ```python
-  import tensorflow_probability as tfp
-  tfd = tfp.distributions
-
   # Define a single scalar HalfNormal distribution.
-  dist = tfd.HalfNormal(scale=3.0)
+  dist = tf.contrib.distributions.HalfNormal(scale=3.0)
 
   # Evaluate the cdf at 1, returning a scalar.
   dist.cdf(1.)
 
   # Define a batch of two scalar valued HalfNormals.
   # The first has scale 11.0, the second 22.0
-  dist = tfd.HalfNormal(scale=[11.0, 22.0])
+  dist = tf.contrib.distributions.HalfNormal(scale=[11.0, 22.0])
 
   # Evaluate the pdf of the first distribution on 1.0, and the second on 1.5,
   # returning a length two tensor.
@@ -89,14 +85,6 @@ class HalfNormal(distribution.Distribution):
 
   """
 
-  @deprecation.deprecated(
-      "2018-10-01",
-      "The TensorFlow Distributions library has moved to "
-      "TensorFlow Probability "
-      "(https://github.com/tensorflow/probability). You "
-      "should update all references to use `tfp.distributions` "
-      "instead of `tf.contrib.distributions`.",
-      warn_once=True)
   def __init__(self,
                scale,
                validate_args=False,
@@ -117,8 +105,8 @@ class HalfNormal(distribution.Distribution):
         if one or more of the statistic's batch members are undefined.
       name: Python `str` name prefixed to Ops created by this class.
     """
-    parameters = dict(locals())
-    with ops.name_scope(name, values=[scale]) as name:
+    parameters = locals()
+    with ops.name_scope(name, values=[scale]):
       with ops.control_dependencies([check_ops.assert_positive(scale)] if
                                     validate_args else []):
         self._scale = array_ops.identity(scale, name="scale")
@@ -150,7 +138,7 @@ class HalfNormal(distribution.Distribution):
     return constant_op.constant([], dtype=dtypes.int32)
 
   def _event_shape(self):
-    return tensor_shape.TensorShape([])
+    return tensor_shape.scalar()
 
   def _sample_n(self, n, seed=None):
     shape = array_ops.concat([[n], self.batch_shape_tensor()], 0)

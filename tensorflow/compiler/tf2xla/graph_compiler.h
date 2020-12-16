@@ -55,36 +55,41 @@ namespace tensorflow {
 // op registration infrastructure instead of FunctionLibraryRuntime.
 class GraphCompiler {
  public:
-  GraphCompiler(XlaCompilationDevice* device, Graph* graph,
-                FunctionLibraryRuntime* flib,
+  GraphCompiler(XlaContext* xla_context, XlaCompilationDevice* device,
+                Graph* graph, FunctionLibraryRuntime* flib,
                 ScopedStepContainer* step_container)
-      : device_(device),
+      : xla_context_(xla_context),
+        device_(device),
         graph_(graph),
         flib_(flib),
         step_container_(step_container) {}
 
-  // Compiles the graph. The results are written in xla_context stored in the
-  // resource_manager of the 'XlaCompilationDevice' that's passed into the
-  // constructor.
+  // Compiles the graph. The results are written in `xla_context` that is passed
+  // into the compiler.
   Status Compile();
 
  private:
   // Partially sets params. This partially set params can be reused
-  // across multiple nodes visit.
+  // across multple nodes visit.
   void PartiallySetupParams(OpKernelContext::Params* params);
+
+  // Tests if a node is a functional node. A functional node represents a
+  // defined computation and should be compiled using `compiler_`.
+  bool IsFunctional(Node* n);
 
   // Compiles a functional node and writes result to OpkernelContext. A
   // functional node represents a defined computation and should be compiled
   // using `compiler_`.
   Status CompileFunctionalNode(Node* n, OpKernelContext* op_context);
 
+  XlaContext* xla_context_;
   XlaCompilationDevice* device_;
   Graph* graph_;
   FunctionLibraryRuntime* flib_;
   ScopedStepContainer* step_container_;
   // A buffer to hold tensor inputs to a node, this is reused across the graph
   // traversal.
-  absl::InlinedVector<TensorValue, 4> tensor_inputs_;
+  gtl::InlinedVector<TensorValue, 4> tensor_inputs_;
 };
 
 }  // namespace tensorflow

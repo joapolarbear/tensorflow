@@ -51,27 +51,19 @@ std::unique_ptr<DecisionNodeEvaluator> CreateBinaryDecisionNodeEvaluator(
 InequalityDecisionNodeEvaluator::InequalityDecisionNodeEvaluator(
     const decision_trees::InequalityTest& test, int32 left, int32 right)
     : BinaryDecisionNodeEvaluator(left, right) {
-  CHECK(safe_strto32(test.feature_id().id().value(), &feature_num_))
-      << "Invalid feature ID: [" << test.feature_id().id().value() << "]";
+  safe_strto32(test.feature_id().id().value(), &feature_num_);
   threshold_ = test.threshold().float_value();
-  _test_type = test.type();
+  include_equals_ =
+      test.type() == decision_trees::InequalityTest::LESS_OR_EQUAL;
 }
 
 int32 InequalityDecisionNodeEvaluator::Decide(
     const std::unique_ptr<TensorDataSet>& dataset, int example) const {
   const float val = dataset->GetExampleValue(example, feature_num_);
-  switch (_test_type) {
-    case decision_trees::InequalityTest::LESS_OR_EQUAL:
-      return val <= threshold_ ? left_child_id_ : right_child_id_;
-    case decision_trees::InequalityTest::LESS_THAN:
-      return val < threshold_ ? left_child_id_ : right_child_id_;
-    case decision_trees::InequalityTest::GREATER_OR_EQUAL:
-      return val >= threshold_ ? left_child_id_ : right_child_id_;
-    case decision_trees::InequalityTest::GREATER_THAN:
-      return val > threshold_ ? left_child_id_ : right_child_id_;
-    default:
-      LOG(ERROR) << "Unknown split test type: " << _test_type;
-      return -1;
+  if (val < threshold_ || (include_equals_ && val == threshold_)) {
+    return left_child_id_;
+  } else {
+    return right_child_id_;
   }
 }
 
@@ -80,9 +72,7 @@ ObliqueInequalityDecisionNodeEvaluator::ObliqueInequalityDecisionNodeEvaluator(
     : BinaryDecisionNodeEvaluator(left, right) {
   for (int i = 0; i < test.oblique().features_size(); ++i) {
     int32 val;
-    CHECK(safe_strto32(test.oblique().features(i).id().value(), &val))
-        << "Invalid feature ID: [" << test.oblique().features(i).id().value()
-        << "]";
+    safe_strto32(test.oblique().features(i).id().value(), &val);
     feature_num_.push_back(val);
     feature_weights_.push_back(test.oblique().weights(i));
   }
@@ -107,8 +97,7 @@ int32 ObliqueInequalityDecisionNodeEvaluator::Decide(
 MatchingValuesDecisionNodeEvaluator::MatchingValuesDecisionNodeEvaluator(
     const decision_trees::MatchingValuesTest& test, int32 left, int32 right)
     : BinaryDecisionNodeEvaluator(left, right) {
-  CHECK(safe_strto32(test.feature_id().id().value(), &feature_num_))
-      << "Invalid feature ID: [" << test.feature_id().id().value() << "]";
+  safe_strto32(test.feature_id().id().value(), &feature_num_);
   for (const auto& val : test.value()) {
     values_.push_back(val.float_value());
   }

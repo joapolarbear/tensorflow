@@ -15,21 +15,20 @@ limitations under the License.
 
 // See docs in ../ops/array_ops.cc
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
+#include "tensorflow/core/kernels/one_hot_op.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/kernels/one_hot_op.h"
 
 namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-#define DEFINE_GPU_SPEC_INDEX(T, TI)             \
-  template class generator::OneGenerator<T, TI>; \
+#define DEFINE_GPU_SPEC_INDEX(T, TI)                   \
+  template class generator::OneGenerator<T, TI>;       \
   template struct functor::OneHot<GPUDevice, T, TI>;
 
 #define DEFINE_GPU_SPEC(T)         \
@@ -38,7 +37,6 @@ typedef Eigen::GpuDevice GPUDevice;
   DEFINE_GPU_SPEC_INDEX(T, int64)
 
 TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPEC);
-TF_CALL_bool(DEFINE_GPU_SPEC);
 TF_CALL_int32(DEFINE_GPU_SPEC);
 TF_CALL_int64(DEFINE_GPU_SPEC);
 
@@ -47,4 +45,4 @@ TF_CALL_int64(DEFINE_GPU_SPEC);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

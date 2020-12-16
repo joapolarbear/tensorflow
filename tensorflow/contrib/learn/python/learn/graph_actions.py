@@ -13,12 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""High level operations on graphs (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""High level operations on graphs."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -73,7 +68,6 @@ def clear_summary_writers():
   return summary_io.SummaryWriterCache.clear()
 
 
-@deprecated(None, 'Use `SummaryWriterCache.get` directly.')
 def get_summary_writer(logdir):
   """Returns single SummaryWriter per logdir in current run.
 
@@ -183,7 +177,7 @@ def train(graph,
     keep_checkpoint_max: The maximum number of recent checkpoint files to
       keep. As new files are created, older files are deleted. If None or 0,
       all checkpoint files are kept. This is simply passed as the max_to_keep
-      arg to tf.compat.v1.train.Saver constructor.
+      arg to tf.train.Saver constructor.
     supervisor_save_summaries_steps: Save summaries every
       `supervisor_save_summaries_steps` seconds when training.
     feed_fn: A function that is called every iteration to produce a `feed_dict`

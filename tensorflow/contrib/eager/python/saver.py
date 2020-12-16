@@ -73,7 +73,7 @@ def restore_variables_on_create(save_path, map_func=None):
     NotFoundError: If the variable is not found in checkpoint.
     ValueError: If not used in eager mode or map_func is not callable.
   """
-  if not context.executing_eagerly():
+  if context.in_graph_mode():
     raise ValueError(
         "Currently, restore_variables_on_create can only be used with "
         "eager execution enabled.")
@@ -82,10 +82,10 @@ def restore_variables_on_create(save_path, map_func=None):
       map_func_wrapper = lambda self, x: x
     else:
       if not callable(map_func):
-        raise ValueError("map_func must be callable.")
+        raise ValueError("map_func must be callaled.")
       map_func_wrapper = lambda self, x: map_func(x)
 
-    ckpt_var_cache = {}
+    ckpt_var_cache = dict()
     reader = checkpoint_utils.load_checkpoint(save_path)
     for k, _ in checkpoint_utils.list_variables(save_path):
       ckpt_var_cache[k] = reader.get_tensor(k)
@@ -114,29 +114,24 @@ def restore_variables_on_create(save_path, map_func=None):
 
 
 class Saver(object):
-  """A tf.compat.v1.train.Saver adapter for use when eager execution is enabled.
-
-  `Saver`'s name-based checkpointing strategy is fragile. Please switch to
-  `tf.train.Checkpoint` or `tf.keras.Model.save_weights`, which perform a more
-  robust object-based saving. These APIs will load checkpoints written by
-  `Saver`.
+  """A tf.train.Saver adapter for use when eager execution is enabled.
   """
 
   def __init__(self, var_list):
-    """A  tf.compat.v1.train.Saver adapter for use when eager execution is enabled.
+    """A  tf.train.Saver adapter for use when eager execution is enabled.
 
-      The API, and on-disk format, mimic tf.compat.v1.train.Saver except that no
+      The API, and on-disk format, mimic tf.train.Saver except that no
       Session is needed.
 
     Args:
       var_list: The list of variables that will be saved and restored. Either a
-        list of `tf.Variable` objects, or a dictionary mapping names to
-        `tf.Variable` objects.
+        list of `tfe.Variable` objects, or a dictionary mapping names to
+        `tfe.Variable` objects.
 
     Raises:
       RuntimeError: if invoked when eager execution has not been enabled.
     """
-    if not context.executing_eagerly():
+    if context.in_graph_mode():
       raise RuntimeError("tfe.Saver can only be used when eager "
                          "execution is enabled. Use tf.train.Saver when "
                          "building graphs.")
@@ -166,21 +161,20 @@ class Saver(object):
     Args:
       file_prefix: Path prefix where parameters were previously saved.
         Typically obtained from a previous `save()` call, or from
-        `tf.train.latest_checkpoint`.
+        @{tf.train.latest_checkpoint}.
     """
     with ops.device("/device:CPU:0"):
       self._saver.restore(None, file_prefix)
 
 
 def get_optimizer_variables(optimizer):
-  """Returns a list of variables for the given `tf.compat.v1.train.Optimizer`.
+  """Returns a list of variables for the given `tf.train.Optimizer`.
 
   Equivalent to `optimizer.variables()`.
 
   Args:
-    optimizer: An instance of `tf.compat.v1.train.Optimizer` which has created
-      variables (typically after a call to `Optimizer.minimize`).
-
+    optimizer: An instance of `tf.train.Optimizer` which has created variables
+      (typically after a call to `Optimizer.minimize`).
   Returns:
     A list of variables which have been created by the `Optimizer`.
   """

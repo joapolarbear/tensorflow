@@ -13,11 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 
-"""High level API for learning (DEPRECATED).
+# TODO(ptucker,ipolosukhin): Improve descriptions.
+"""High level API for learning.
 
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
+See the @{$python/contrib.learn} guide.
 
 @@BaseEstimator
 @@Estimator

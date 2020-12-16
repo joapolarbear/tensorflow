@@ -1,21 +1,11 @@
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
-load("//tensorflow:tensorflow.bzl", "py_binary")
+licenses(["notice"])  # Apache 2.0
 
-package(
-    default_visibility = ["//tensorflow:internal"],
-    licenses = ["notice"],  # Apache 2.0
-)
+package(default_visibility = ["//tensorflow:internal"])
+
+load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 
 py_binary(
     name = "rnn_ptb",
-    srcs = ["rnn_ptb.py"],
-    python_version = "PY2",
-    srcs_version = "PY2AND3",
-    deps = [":rnn_ptb_lib"],
-)
-
-py_library(
-    name = "rnn_ptb_lib",
     srcs = ["rnn_ptb.py"],
     srcs_version = "PY2AND3",
     deps = [
@@ -30,7 +20,7 @@ cuda_py_test(
     name = "rnn_ptb_test",
     srcs = ["rnn_ptb_test.py"],
     additional_deps = [
-        ":rnn_ptb_lib",
+        ":rnn_ptb",
         "//tensorflow/contrib/eager/python:tfe",
         "//tensorflow:tensorflow_py",
     ],
@@ -40,11 +30,8 @@ cuda_py_test(
     name = "rnn_ptb_graph_test",
     srcs = ["rnn_ptb_graph_test.py"],
     additional_deps = [
-        ":rnn_ptb_lib",
+        ":rnn_ptb",
         "//third_party/py/numpy",
         "//tensorflow:tensorflow_py",
-    ],
-    tags = [
-        "oss_serial",
     ],
 )

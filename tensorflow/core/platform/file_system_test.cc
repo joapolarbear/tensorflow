@@ -21,7 +21,6 @@ limitations under the License.
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/null_file_system.h"
 #include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
@@ -124,8 +123,8 @@ class InterPlanetaryFileSystem : public NullFileSystem {
     io::ParseURI(name, &scheme, &host, &path);
     ASSERT_EQ(scheme, "ipfs");
     ASSERT_EQ(host, "solarsystem");
-    absl::ConsumePrefix(&path, "/");
-    *parsed_path = string(path);
+    path.Consume("/");
+    *parsed_path = path.ToString();
   }
 
   std::map<string, std::set<string>> celestial_bodies_ = {
@@ -160,11 +159,10 @@ string Match(InterPlanetaryFileSystem* ipfs, const string& suffix_pattern) {
     std::sort(results.begin(), results.end());
     for (const string& result : results) {
       StringPiece trimmed_result(result);
-      EXPECT_TRUE(
-          absl::ConsumePrefix(&trimmed_result, strings::StrCat(kPrefix, "/")));
+      EXPECT_TRUE(trimmed_result.Consume(strings::StrCat(kPrefix, "/")));
       trimmed_results.push_back(trimmed_result);
     }
-    return absl::StrJoin(trimmed_results, ",");
+    return str_util::Join(trimmed_results, ",");
   }
 }
 

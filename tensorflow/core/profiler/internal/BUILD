@@ -1,10 +1,11 @@
-load("//tensorflow:tensorflow.bzl", "if_not_windows", "tf_cc_test", "tf_cuda_library")
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test")
-
 package(
     default_visibility = ["//tensorflow:internal"],
-    licenses = ["notice"],  # Apache 2.0
 )
+
+licenses(["notice"])  # Apache 2.0
+
+load("//tensorflow:tensorflow.bzl", "tf_cc_test")
+load("//tensorflow:tensorflow.bzl", "if_not_windows")
 
 cc_library(
     name = "tfprof_stats",
@@ -15,6 +16,7 @@ cc_library(
         ":tfprof_graph",
         ":tfprof_node",
         ":tfprof_op",
+        ":tfprof_options",
         ":tfprof_scope",
         ":tfprof_show",
         ":tfprof_timeline",
@@ -24,7 +26,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -46,12 +47,12 @@ cc_library(
     srcs = ["tfprof_node.cc"],
     hdrs = ["tfprof_node.h"],
     deps = [
+        ":tfprof_options",
         ":tfprof_utils",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -62,6 +63,7 @@ cc_library(
     deps = [
         ":tfprof_constants",
         ":tfprof_node",
+        ":tfprof_options",
         ":tfprof_show",
         ":tfprof_tensor",
         ":tfprof_utils",
@@ -72,7 +74,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -83,6 +84,7 @@ cc_library(
     deps = [
         ":tfprof_constants",
         ":tfprof_node",
+        ":tfprof_options",
         ":tfprof_show_multi",
         ":tfprof_tensor",
         ":tfprof_utils",
@@ -92,7 +94,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -103,6 +104,7 @@ cc_library(
     deps = [
         ":tfprof_constants",
         ":tfprof_node",
+        ":tfprof_options",
         ":tfprof_show_multi",
         ":tfprof_timeline",
         ":tfprof_utils",
@@ -114,7 +116,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -125,6 +126,7 @@ cc_library(
     deps = [
         ":tfprof_constants",
         ":tfprof_node",
+        ":tfprof_options",
         ":tfprof_show",
         ":tfprof_tensor",
         ":tfprof_utils",
@@ -133,7 +135,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -144,11 +145,11 @@ cc_library(
     deps = [
         ":tfprof_constants",
         ":tfprof_node",
+        ":tfprof_options",
         ":tfprof_utils",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -160,6 +161,7 @@ cc_library(
         ":tfprof_constants",
         ":tfprof_node",
         ":tfprof_node_show",
+        ":tfprof_options",
         ":tfprof_tensor",
         ":tfprof_timeline",
         ":tfprof_utils",
@@ -168,7 +170,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -180,6 +181,7 @@ cc_library(
         ":tfprof_constants",
         ":tfprof_node",
         ":tfprof_node_show",
+        ":tfprof_options",
         ":tfprof_scope",
         ":tfprof_show",
         ":tfprof_tensor",
@@ -190,7 +192,6 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -208,6 +209,7 @@ tf_cc_test(
     ],
     deps = [
         ":tfprof_constants",
+        ":tfprof_options",
         ":tfprof_stats",
         ":tfprof_tf_testlib",
         ":tfprof_utils",
@@ -216,7 +218,6 @@ tf_cc_test(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -230,6 +231,7 @@ tf_cc_test(
     ],
     deps = [
         ":tfprof_constants",
+        ":tfprof_options",
         ":tfprof_stats",
         ":tfprof_tf_testlib",
         ":tfprof_utils",
@@ -239,7 +241,6 @@ tf_cc_test(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -249,10 +250,21 @@ cc_library(
     hdrs = ["tfprof_utils.h"],
     copts = if_not_windows(["-Wno-sign-compare"]),
     deps = [
+        ":tfprof_options",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:regexp_internal",
-        "//tensorflow/core/profiler:tfprof_options",
+    ],
+)
+
+cc_library(
+    name = "tfprof_options",
+    srcs = ["tfprof_options.cc"],
+    hdrs = ["tfprof_options.h"],
+    deps = [
+        "//tensorflow/core:framework_headers_lib",
+        "//tensorflow/core:lib",
+        "//tensorflow/core/profiler:protos_all_cc",
     ],
 )
 
@@ -267,13 +279,13 @@ cc_library(
     srcs = ["print_model_analysis.cc"],
     hdrs = ["print_model_analysis.h"],
     deps = [
+        ":tfprof_options",
         ":tfprof_stats",
         "//tensorflow/c:checkpoint_reader",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
         "//tensorflow/core/profiler/internal/advisor:tfprof_advisor",
     ],
     alwayslink = 1,
@@ -293,6 +305,7 @@ tf_cc_test(
     ],
     deps = [
         ":tfprof_constants",
+        ":tfprof_options",
         ":tfprof_stats",
         ":tfprof_tf_testlib",
         ":tfprof_utils",
@@ -301,7 +314,6 @@ tf_cc_test(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -328,6 +340,7 @@ tf_cc_test(
         "testdata/graph.pbtxt",
     ],
     deps = [
+        ":tfprof_options",
         ":tfprof_stats",
         ":tfprof_tf_testlib",
         ":tfprof_utils",
@@ -336,7 +349,6 @@ tf_cc_test(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core/profiler:protos_all_cc",
-        "//tensorflow/core/profiler:tfprof_options",
     ],
 )
 
@@ -364,99 +376,17 @@ cc_library(
         "//tensorflow/core:regexp_internal",
     ],
 )
-
-tf_cuda_library(
-    name = "traceme_recorder",
-    srcs = ["traceme_recorder.cc"],
-    hdrs = ["traceme_recorder.h"],
-    visibility = [
-        "//perftools/accelerators/xprof/xprofilez/cpu:__pkg__",  # host_tracer
-        "//perftools/accelerators/xprof/xprofilez/integration_tests:__pkg__",  # traceme_test
-        "//tensorflow/core:__pkg__",  # executor.cc
-        "//tensorflow/core/profiler/internal/cpu:__pkg__",  # host_tracer
-        "//tensorflow/core/profiler/lib:__pkg__",  # traceme
-    ],
-    deps = [
-        "//tensorflow/core:lib",
-        "@com_google_absl//absl/base:core_headers",
-    ],
-)
-
-tf_cuda_cc_test(
-    name = "traceme_recorder_test",
-    srcs = ["traceme_recorder_test.cc"],
-    deps = [
-        ":traceme_recorder",
-        "//tensorflow/core:lib",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-tf_cuda_library(
-    name = "profiler_interface",
-    srcs = [
-        "profiler_interface.cc",
-    ],
-    hdrs = [
-        "profiler_interface.h",
-    ],
-    deps = [
-        "//tensorflow/core:lib",
-        "//tensorflow/core:protos_all_cc",
-        "@com_google_absl//absl/synchronization",
-    ],
-)
+# -----------------------------------------------------------------------------
+# Google-internal targets.  These must be at the end for syncrepo.
 
 filegroup(
-    name = "mobile_srcs",
-    srcs = [
-        "profiler_interface.cc",
-        "profiler_interface.h",
-        "traceme_recorder.cc",
-        "traceme_recorder.h",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-tf_cc_test(
-    name = "scoped_annotation_test",
-    size = "small",
-    srcs = ["scoped_annotation_test.cc"],
-    deps = [
-        "//tensorflow/core:core_cpu",
-        "//tensorflow/core:core_cpu_internal",
-        "//tensorflow/core:device_tracer",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:lib_internal",
-        "//tensorflow/core:protos_all_cc",
-        "//tensorflow/core:test",
-        "//tensorflow/core:test_main",
-        "//tensorflow/core:testlib",
-        "//tensorflow/core/platform:annotation",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-tf_cuda_library(
-    name = "python_traceme",
-    hdrs = ["python_traceme.h"],
-    visibility = ["//tensorflow/python:__pkg__"],
-    deps = [
-        ":traceme_recorder",
-        "//tensorflow/core/profiler/lib:traceme",
-        "@com_google_absl//absl/types:optional",
-    ],
-)
-
-tf_cuda_library(
-    name = "python_scoped_annotation",
-    hdrs = ["python_scoped_annotation.h"],
-    visibility = ["//tensorflow/python:__pkg__"],
-    deps = [
-        "//tensorflow/core/platform:annotation",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:optional",
-    ],
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

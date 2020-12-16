@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Test data utilities (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Test data utilities."""
 
 from __future__ import absolute_import
 from __future__ import division

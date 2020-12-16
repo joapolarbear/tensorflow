@@ -13,12 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""TensorFlow Ops for Sequence to Sequence models (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""TensorFlow Ops for Sequence to Sequence models."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -31,10 +26,8 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn
 from tensorflow.python.ops import variable_scope as vs
-from tensorflow.python.util.deprecation import deprecated
 
 
-@deprecated(None, 'Please use tf.nn/tf.layers directly.')
 def sequence_classifier(decoding, labels, sampling_decoding=None, name=None):
   """Returns predictions and loss for sequence of predictions.
 
@@ -64,7 +57,6 @@ def sequence_classifier(decoding, labels, sampling_decoding=None, name=None):
     return array_ops.stack(predictions, axis=1), loss
 
 
-@deprecated(None, 'Please use tf.nn/tf.layers directly.')
 def seq2seq_inputs(x, y, input_length, output_length, sentinel=None, name=None):
   """Processes inputs for Sequence to Sequence models.
 
@@ -95,7 +87,6 @@ def seq2seq_inputs(x, y, input_length, output_length, sentinel=None, name=None):
     return in_x, in_y, out_y
 
 
-@deprecated(None, 'Please use tf.nn/tf.layers directly.')
 def rnn_decoder(decoder_inputs, initial_state, cell, scope=None):
   """RNN Decoder that creates training and sampling sub-graphs.
 
@@ -132,7 +123,6 @@ def rnn_decoder(decoder_inputs, initial_state, cell, scope=None):
   return outputs, states, sampling_outputs, sampling_states
 
 
-@deprecated(None, 'Please use tf.nn/tf.layers directly.')
 def rnn_seq2seq(encoder_inputs,
                 decoder_inputs,
                 encoder_cell,

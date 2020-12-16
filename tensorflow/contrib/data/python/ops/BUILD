@@ -1,3 +1,9 @@
+package(default_visibility = ["//tensorflow:internal"])
+
+licenses(["notice"])  # Apache 2.0
+
+exports_files(["LICENSE"])
+
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_gen_op_wrapper_py",
@@ -5,28 +11,19 @@ load(
 )
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 
-package(
-    default_visibility = ["//tensorflow:internal"],
-    licenses = ["notice"],  # Apache 2.0
-)
-
-exports_files(["LICENSE"])
-
 py_library(
-    name = "counter",
-    srcs = ["counter.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:counter",
+    name = "dataset_ops",
+    srcs = [
+        "counter.py",
+        "dataset_ops.py",
     ],
-)
-
-py_library(
-    name = "get_single_element",
-    srcs = ["get_single_element.py"],
     srcs_version = "PY2AND3",
     deps = [
-        "//tensorflow/python/data/experimental/ops:get_single_element",
+        ":transformation_ops",
+        "//tensorflow/python:dataset_ops_gen",
+        "//tensorflow/python:util",
+        "//tensorflow/python/data/ops:dataset_ops",
+        "//tensorflow/python/data/util:nest",
     ],
 )
 
@@ -37,7 +34,9 @@ py_library(
     ],
     srcs_version = "PY2AND3",
     deps = [
-        "//tensorflow/python/data/experimental/ops:iterator_ops",
+        "//tensorflow/python:dataset_ops_gen",
+        "//tensorflow/python:framework_ops",
+        "//tensorflow/python:training",
     ],
 )
 
@@ -48,7 +47,15 @@ py_library(
     ],
     srcs_version = "PY2AND3",
     deps = [
-        "//tensorflow/python/data/experimental/ops:random_ops",
+        "//tensorflow/python:constant_op",
+        "//tensorflow/python:dataset_ops_gen",
+        "//tensorflow/python:dtypes",
+        "//tensorflow/python:framework_ops",
+        "//tensorflow/python:random_seed",
+        "//tensorflow/python:tensor_shape",
+        "//tensorflow/python/data/ops:dataset_ops",
+        "//tensorflow/python/data/util:nest",
+        "//tensorflow/python/data/util:sparse",
     ],
 )
 
@@ -59,25 +66,18 @@ py_library(
     ],
     srcs_version = "PY2AND3",
     deps = [
-        ":batching",
-        ":interleave_ops",
-        ":parsing_ops",
-        ":shuffle_ops",
-        "//tensorflow/python:constant_op",
+        ":dataset_ops",
         "//tensorflow/python:dataset_ops_gen",
         "//tensorflow/python:dtypes",
-        "//tensorflow/python:experimental_dataset_ops_gen",
         "//tensorflow/python:framework_ops",
-        "//tensorflow/python:lib",
+        "//tensorflow/python:parsing_ops",
         "//tensorflow/python:platform",
+        "//tensorflow/python:sparse_tensor",
         "//tensorflow/python:tensor_shape",
         "//tensorflow/python:util",
-        "//tensorflow/python/data/experimental/ops:readers",
         "//tensorflow/python/data/ops:dataset_ops",
         "//tensorflow/python/data/ops:readers",
-        "//tensorflow/python/data/util:convert",
         "//tensorflow/python/data/util:nest",
-        "//third_party/py/numpy",
     ],
 )
 
@@ -88,173 +88,84 @@ py_library(
     ],
     srcs_version = "PY2AND3",
     deps = [
-        "//tensorflow/python/data/experimental/ops:shuffle_ops",
+        ":random_ops",
+        ":transformation_ops",
+        "//tensorflow/python/data/ops:dataset_ops",
     ],
 )
 
 py_library(
-    name = "batching",
-    srcs = ["batching.py"],
+    name = "transformation_ops",
+    srcs = [
+        "batching.py",
+        "enumerate_ops.py",
+        "error_ops.py",
+        "grouping.py",
+        "interleave_ops.py",
+        "resampling.py",
+        "scan_ops.py",
+        "stats_ops.py",
+    ],
     srcs_version = "PY2AND3",
     deps = [
-        ":get_single_element",
-        ":grouping",
-        "//tensorflow/contrib/framework:framework_py",
         "//tensorflow/python:array_ops",
+        "//tensorflow/python:control_flow_ops",
         "//tensorflow/python:dataset_ops_gen",
         "//tensorflow/python:dtypes",
         "//tensorflow/python:framework_ops",
+        "//tensorflow/python:function",
+        "//tensorflow/python:logging_ops",
         "//tensorflow/python:math_ops",
+        "//tensorflow/python:random_ops",
         "//tensorflow/python:tensor_shape",
         "//tensorflow/python:tensor_util",
-        "//tensorflow/python/data/experimental/ops:batching",
+        "//tensorflow/python:util",
         "//tensorflow/python/data/ops:dataset_ops",
-        "//tensorflow/python/data/util:convert",
         "//tensorflow/python/data/util:nest",
         "//tensorflow/python/data/util:sparse",
         "//third_party/py/numpy",
     ],
 )
 
-py_library(
-    name = "enumerate_ops",
-    srcs = ["enumerate_ops.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:enumerate_ops",
-    ],
-)
-
-py_library(
-    name = "error_ops",
-    srcs = ["error_ops.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:error_ops",
-    ],
-)
-
-py_library(
-    name = "grouping",
-    srcs = ["grouping.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:grouping",
-    ],
-)
-
-py_library(
-    name = "interleave_ops",
-    srcs = ["interleave_ops.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:interleave_ops",
-    ],
-)
-
-py_library(
-    name = "parsing_ops",
-    srcs = ["parsing_ops.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:parsing_ops",
-    ],
-)
-
-py_library(
-    name = "resampling",
-    srcs = ["resampling.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:resampling",
-    ],
-)
-
-py_library(
-    name = "scan_ops",
-    srcs = ["scan_ops.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:scan_ops",
-    ],
-)
-
-py_library(
-    name = "sliding",
-    srcs = ["sliding.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python:dataset_ops_gen",
-        "//tensorflow/python:dtypes",
-        "//tensorflow/python:framework_ops",
-        "//tensorflow/python:function",
-        "//tensorflow/python/data/ops:dataset_ops",
-        "//tensorflow/python/data/util:structure",
-    ],
-)
-
-py_library(
-    name = "threadpool",
-    srcs = ["threadpool.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:threadpool",
-    ],
-)
-
-py_library(
-    name = "unique",
-    srcs = [
-        "unique.py",
-    ],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:unique",
-    ],
-)
-
-py_library(
-    name = "writers",
-    srcs = [
-        "writers.py",
-    ],
-    srcs_version = "PY2AND3",
-    deps = [
-        "//tensorflow/python/data/experimental/ops:writers",
-    ],
-)
-
-py_library(
+tf_gen_op_wrapper_py(
     name = "prefetching_ops",
-    srcs = ["prefetching_ops.py"],
+    out = "gen_prefetching_ops.py",
+    deps = ["//tensorflow/contrib/data:prefetching_ops_op_lib"],
+)
+
+tf_kernel_library(
+    name = "prefetching_ops_kernels",
     deps = [
-        "//tensorflow/python/data/experimental/ops:prefetching_ops",
+        "//tensorflow/contrib/data/kernels:prefetching_kernels",
+        "//tensorflow/core:framework",
+    ],
+    alwayslink = 1,
+)
+
+tf_custom_op_py_library(
+    name = "prefetching_py",
+    srcs = ["prefetching_ops.py"],
+    dso = ["//tensorflow/contrib/data:_prefetching_ops.so"],
+    kernels = [
+        ":prefetching_ops_kernels",
+        "//tensorflow/contrib/data:prefetching_ops_op_lib",
+    ],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":prefetching_ops",
+        "//tensorflow/contrib/util:util_py",
+        "//tensorflow/python:platform",
     ],
 )
 
-py_library(
-    name = "dataset_ops",
-    deps = [
-        ":batching",
-        ":counter",
-        ":enumerate_ops",
-        ":error_ops",
-        ":get_single_element",
-        ":grouping",
-        ":interleave_ops",
-        ":prefetching_ops",
-        ":random_ops",
-        ":readers",
-        ":resampling",
-        ":scan_ops",
-        ":shuffle_ops",
-        ":sliding",
-        ":threadpool",
-        ":unique",
-        ":writers",
-        "//tensorflow/python:dataset_ops_gen",
-        "//tensorflow/python:util",
-        "//tensorflow/python/data/ops:dataset_ops",
-        "//tensorflow/python/data/util:nest",
-    ],
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

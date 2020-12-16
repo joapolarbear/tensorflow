@@ -21,6 +21,7 @@ limitations under the License.
 #include "tensorflow/core/graph/subgraph.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/public/session.h"
+#include "tensorflow/core/util/command_line_flags.h"
 #include "tensorflow/tools/graph_transforms/transform_utils.h"
 
 namespace tensorflow {
@@ -80,17 +81,7 @@ Status RemoveNodes(const GraphDef& input_graph_def,
                 return Status::OK();
               }
               const NodeDef& input_node = match.inputs[0].node;
-              string target_name = input_node.name();
-              for (const string& input : replace_node.input()) {
-                if (!input.compare(0, target_name.size(), target_name)) {
-                  if (input.size() == target_name.size() ||
-                      input[target_name.size()] == ':') {
-                    target_name = input;
-                    break;
-                  }
-                }
-              }
-              inputs_to_rename[replace_node.name()] = target_name;
+              inputs_to_rename[replace_node.name()] = input_node.name();
               inputs_to_rename["^" + replace_node.name()] =
                   "^" + input_node.name();
               new_nodes->push_back(input_node);

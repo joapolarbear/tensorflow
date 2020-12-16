@@ -27,20 +27,19 @@ limitations under the License.
 namespace tensorflow {
 namespace tfprof {
 
-const MultiGraphNodeProto& TFMultiShow::Show(const string& prefix,
-                                             const Options& opts) {
+const MultiGraphNodeProto& TFMultiShow::Show(const Options& opts) {
   if (opts.output_type == kOutput[0]) {
     Timeline timeline(opts.step, opts.output_options.at(kTimelineOpts[0]));
     return ShowInternal(opts, &timeline)->proto();
   } else {
     const ShowMultiNode* ret = ShowInternal(opts, nullptr);
     if (opts.output_type == kOutput[1]) {
-      printf("%s", (prefix + ret->formatted_str).c_str());
+      printf("%s", ret->formatted_str.c_str());
       fflush(stdout);
     } else if (opts.output_type == kOutput[2]) {
       Status s = WriteStringToFile(Env::Default(),
                                    opts.output_options.at(kFileOpts[0]),
-                                   prefix + ret->formatted_str);
+                                   ret->formatted_str);
       if (!s.ok()) {
         fprintf(stderr, "%s\n", s.ToString().c_str());
       }
@@ -159,7 +158,7 @@ string TFMultiShow::FormatLegend(const Options& opts) const {
     legends.push_back("input shapes");
   }
   return strings::Printf("node name | %s\n",
-                         absl::StrJoin(legends, " | ").c_str());
+                         str_util::Join(legends, " | ").c_str());
 }
 
 string TFMultiShow::FormatInputShapes(const MultiGraphNodeProto& proto) const {
@@ -179,11 +178,11 @@ string TFMultiShow::FormatInputShapes(const MultiGraphNodeProto& proto) const {
         input_vec.push_back(strings::Printf("%d:unknown", s.first));
       } else {
         input_vec.push_back(strings::Printf(
-            "%d:%s", s.first, absl::StrJoin(s.second, "x").c_str()));
+            "%d:%s", s.first, str_util::Join(s.second, "x").c_str()));
       }
     }
     string shape_type_str = strings::Printf(
-        "input_type: %s", absl::StrJoin(input_vec, ",\t").c_str());
+        "input_type: %s", str_util::Join(input_vec, ",\t").c_str());
     auto t = input_shapes_attr.find(shape_type_str);
     if (t == input_shapes_attr.end()) {
       input_shapes_attr.insert(
@@ -215,7 +214,7 @@ string TFMultiShow::FormatInputShapes(const MultiGraphNodeProto& proto) const {
         "%s\t(run*%lld|defined*%lld)\texec_time: %s", s.first.c_str(),
         std::get<1>(t), std::get<0>(t), FormatTime(std::get<2>(t)).c_str()));
   }
-  return absl::StrJoin(input_types, "\n");
+  return str_util::Join(input_types, "\n");
 }
 
 std::vector<string> TFMultiShow::FormatTimes(const ShowMultiNode* node,

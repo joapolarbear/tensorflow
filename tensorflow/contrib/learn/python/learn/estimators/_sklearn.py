@@ -13,18 +13,17 @@
 # limitations under the License.
 # ==============================================================================
 
-"""sklearn cross-support (deprecated)."""
+"""sklearn cross-support."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import os
 
 import numpy as np
 import six
-
-from tensorflow.python.util.compat import collections_abc
 
 
 def _pprint(d):
@@ -51,12 +50,12 @@ class _BaseEstimator(object):
       params : mapping of string to any
       Parameter names mapped to their values.
     """
-    out = {}
+    out = dict()
     param_names = [name for name in self.__dict__ if not name.startswith('_')]
     for key in param_names:
       value = getattr(self, key, None)
 
-      if isinstance(value, collections_abc.Callable):
+      if isinstance(value, collections.Callable):
         continue
 
       # XXX: should we rather test if instance of estimator?
@@ -133,8 +132,6 @@ class _TransformerMixin():
 class NotFittedError(ValueError, AttributeError):
   """Exception class to raise if estimator is used before fitting.
 
-  USE OF THIS EXCEPTION IS DEPRECATED.
-
   This class inherits from both ValueError and AttributeError to help with
   exception handling and backward compatibility.
 
@@ -195,7 +192,7 @@ if TRY_IMPORT_SKLEARN:
   # pylint: disable=g-import-not-at-top,g-multiple-import,unused-import
   from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, TransformerMixin
   from sklearn.metrics import accuracy_score, log_loss, mean_squared_error
-  from sklearn.model_selection import train_test_split
+  from sklearn.cross_validation import train_test_split
   try:
     from sklearn.exceptions import NotFittedError
   except ImportError:

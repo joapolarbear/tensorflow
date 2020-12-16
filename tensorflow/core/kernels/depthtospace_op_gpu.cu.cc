@@ -13,14 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
-#include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/depthtospace_op.h"
+
+#include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/platform/types.h"
-#include "tensorflow/core/util/gpu_kernel_helper.h"
+#include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
 namespace {
@@ -37,7 +38,7 @@ __global__ void D2S_NHWC(const int32 nthreads,
                          const int input_depth, const int output_height,
                          const int output_width, const int output_depth,
                          dtype* __restrict__ output_ptr) {
-  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
+  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + output_depth * (w + output_width * (h + output_height * b))
     const int d = out_idx % output_depth;
     const int out_idx2 = out_idx / output_depth;
@@ -66,7 +67,7 @@ __global__ void D2S_NCHW(const int32 nthreads,
                          const int block_size, const int input_width,
                          const int output_depth_by_input_height,
                          dtype* __restrict__ output_ptr) {
-  GPU_1D_KERNEL_LOOP(input_idx, nthreads) {
+  CUDA_1D_KERNEL_LOOP(input_idx, nthreads) {
     // We will be converting the image from ordering:
     // n, bY, bX, oC, iY, iX    (== input_idx)   to
     // n, oC, iY, bY, iX, bX
@@ -104,7 +105,7 @@ __global__ void D2S_NCHW_LOOP(const int32 nthreads,
                               const int output_depth_by_input_area,
                               const int input_depth_by_input_area,
                               dtype* __restrict__ output) {
-  GPU_1D_KERNEL_LOOP(thread_idx, nthreads) {
+  CUDA_1D_KERNEL_LOOP(thread_idx, nthreads) {
     // We will be converting the image from ordering:
     // n, bY, bX, oC, iY, iX   to
     // n, oC, iY, bY, iX, bX
@@ -157,15 +158,11 @@ struct DepthToSpaceOpFunctor<GPUDevice, T, FORMAT_NHWC> {
 
     const int total_count =
         batch_size * output_height * output_width * output_depth;
-    if (total_count == 0) {
-      return;
-    }
-    GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
-    TF_CHECK_OK(GpuLaunchKernel(
-        D2S_NHWC<T>, config.block_count, config.thread_per_block, 0, d.stream(),
+    CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
+    D2S_NHWC<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         config.virtual_thread_count, input.data(), block_size, batch_size,
         input_height, input_width, input_depth, output_height, output_width,
-        output_depth, output.data()));
+        output_depth, output.data());
   }
   void operator()(const GPUDevice& d, typename TTypes<T, 5>::ConstTensor input,
                   int block_size, typename TTypes<T, 5>::Tensor output) {
@@ -191,45 +188,35 @@ struct DepthToSpaceOpFunctor<GPUDevice, T, FORMAT_NCHW> {
       const int output_width = output.dimension(3);
       const int output_depth_by_input_area = output_depth * input_area;
       const int total_count = batch_size * output_depth_by_input_area;
-      if (total_count == 0) {
-        return;
-      }
-      GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
+      CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
       switch (block_size) {
         case 2:
-          TF_CHECK_OK(GpuLaunchKernel(
-              D2S_NCHW_LOOP<T, 2>, config.block_count, config.thread_per_block,
-              0, d.stream(), total_count, input.data(), input_width,
-              output_width, output_depth_by_input_area,
-              input_depth_by_input_area, output.data()));
-          return;
+          return D2S_NCHW_LOOP<T, 2>
+              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+                  total_count, input.data(), input_width, output_width,
+                  output_depth_by_input_area, input_depth_by_input_area,
+                  output.data());
         case 3:
-          TF_CHECK_OK(GpuLaunchKernel(
-              D2S_NCHW_LOOP<T, 3>, config.block_count, config.thread_per_block,
-              0, d.stream(), total_count, input.data(), input_width,
-              output_width, output_depth_by_input_area,
-              input_depth_by_input_area, output.data()));
-          return;
+          return D2S_NCHW_LOOP<T, 3>
+              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+                  total_count, input.data(), input_width, output_width,
+                  output_depth_by_input_area, input_depth_by_input_area,
+                  output.data());
         case 4:
-          TF_CHECK_OK(GpuLaunchKernel(
-              D2S_NCHW_LOOP<T, 4>, config.block_count, config.thread_per_block,
-              0, d.stream(), total_count, input.data(), input_width,
-              output_width, output_depth_by_input_area,
-              input_depth_by_input_area, output.data()));
-          return;
+          return D2S_NCHW_LOOP<T, 4>
+              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+                  total_count, input.data(), input_width, output_width,
+                  output_depth_by_input_area, input_depth_by_input_area,
+                  output.data());
       }
     }
 
     // Other block sizes are processed by the generic kernel.
     const int total_count = batch_size * input_depth_by_input_area;
-    if (total_count == 0) {
-      return;
-    }
-    auto config = GetGpuLaunchConfig(total_count, d);
-    TF_CHECK_OK(GpuLaunchKernel(
-        D2S_NCHW<T>, config.block_count, config.thread_per_block, 0, d.stream(),
+    auto config = GetCudaLaunchConfig(total_count, d);
+    D2S_NCHW<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         config.virtual_thread_count, input.data(), block_size, input_width,
-        output_depth * input_height, output.data()));
+        output_depth * input_height, output.data());
   }
   void operator()(const GPUDevice& d, typename TTypes<T, 5>::ConstTensor input,
                   int block_size, typename TTypes<T, 5>::Tensor output) {
@@ -242,15 +229,9 @@ struct DepthToSpaceOpFunctor<GPUDevice, T, FORMAT_NCHW> {
 template struct functor::DepthToSpaceOpFunctor<GPUDevice, float, FORMAT_NCHW>;
 template struct functor::DepthToSpaceOpFunctor<GPUDevice, float, FORMAT_NHWC>;
 
-// Instantiate the GPU implementations for Eigen::half.
-template struct functor::DepthToSpaceOpFunctor<GPUDevice, Eigen::half,
-                                               FORMAT_NCHW>;
-template struct functor::DepthToSpaceOpFunctor<GPUDevice, Eigen::half,
-                                               FORMAT_NHWC>;
-
 // NCHW_VECT_C with 4 x qint8 can be treated as NCHW int32.
 template struct functor::DepthToSpaceOpFunctor<GPUDevice, int32, FORMAT_NCHW>;
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

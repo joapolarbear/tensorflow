@@ -13,6 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 """A Dual Coordinate Ascent optimizer library for training fast linear models.
+
+@@sdca_optimizer
+@@sdca_fprint
+@@sdca_shrink_l1
 """
 
 # pylint: disable=g-bad-name
@@ -27,7 +31,11 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops.gen_sdca_ops import *
 # pylint: enable=wildcard-import
 
+from tensorflow.python.util.all_util import remove_undocumented
+
 ops.NotDifferentiable("SdcaFprint")
 ops.NotDifferentiable("SdcaOptimizer")
-ops.NotDifferentiable("SdcaOptimizerV2")
 ops.NotDifferentiable("SdcaShrinkL1")
+
+
+remove_undocumented(__name__)

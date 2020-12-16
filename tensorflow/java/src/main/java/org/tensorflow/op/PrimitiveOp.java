@@ -25,11 +25,6 @@ import org.tensorflow.Operation;
  */
 public abstract class PrimitiveOp implements Op {
 
-  /** Returns the underlying {@link Operation} */
-  public Operation op() {
-    return operation;
-  }
-
   @Override
   public final int hashCode() {
     return operation.hashCode();
@@ -53,6 +48,10 @@ public abstract class PrimitiveOp implements Op {
     return String.format("<%s '%s'>", operation.type(), operation.name());
   }
 
+  /**
+   * Underlying operation. It is deliberately not exposed by a getter method to avoid any name
+   * conflict with generated methods of the subclasses.
+   */
   protected final Operation operation;
 
   /**

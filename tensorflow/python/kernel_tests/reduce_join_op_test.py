@@ -25,7 +25,6 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import string_ops
 from tensorflow.python.platform import test
@@ -101,7 +100,7 @@ class ReduceJoinTest(UnicodeTestCase):
                       input_array,
                       truth,
                       truth_shape,
-                      axis,
+                      reduction_indices,
                       keep_dims=False,
                       separator=""):
     """Compares the output of reduce_join to an expected result.
@@ -110,23 +109,26 @@ class ReduceJoinTest(UnicodeTestCase):
       input_array: The string input to be joined.
       truth: An array or np.array of the expected result.
       truth_shape: An array or np.array of the expected shape.
-      axis: The indices to reduce over.
+      reduction_indices: The indices to reduce over.
       keep_dims: Whether or not to retain reduced dimensions.
       separator: The separator to use for joining.
     """
-    with self.cached_session():
+    with self.test_session():
       output = string_ops.reduce_join(
           inputs=input_array,
-          axis=axis,
+          reduction_indices=reduction_indices,
           keep_dims=keep_dims,
           separator=separator)
-      output_array = self.evaluate(output)
+      output_array = output.eval()
 
     self.assertAllEqualUnicode(truth, output_array)
     self.assertAllEqual(truth_shape, output.get_shape())
 
-  def _testMultipleReduceJoin(self, input_array, axis, separator=" "):
-    """Tests reduce_join for one input and multiple axes.
+  def _testMultipleReduceJoin(self,
+                              input_array,
+                              reduction_indices,
+                              separator=" "):
+    """Tests reduce_join for one input and multiple reduction_indices.
 
     Does so by comparing the output to that from nested reduce_string_joins.
     The correctness of single-dimension reduce_join is verified by other
@@ -134,26 +136,35 @@ class ReduceJoinTest(UnicodeTestCase):
 
     Args:
       input_array: The input to test.
-      axis: The indices to reduce.
+      reduction_indices: The indices to reduce.
       separator: The separator to use when joining.
     """
-    with self.cached_session():
+    with self.test_session():
       output = string_ops.reduce_join(
-          inputs=input_array, axis=axis, keep_dims=False, separator=separator)
+          inputs=input_array,
+          reduction_indices=reduction_indices,
+          keep_dims=False,
+          separator=separator)
       output_keep_dims = string_ops.reduce_join(
-          inputs=input_array, axis=axis, keep_dims=True, separator=separator)
+          inputs=input_array,
+          reduction_indices=reduction_indices,
+          keep_dims=True,
+          separator=separator)
 
       truth = input_array
-      for index in axis:
+      for index in reduction_indices:
         truth = string_ops.reduce_join(
-            inputs=truth, axis=index, keep_dims=True, separator=separator)
-      if not axis:
+            inputs=truth,
+            reduction_indices=index,
+            keep_dims=True,
+            separator=separator)
+      if not reduction_indices:
         truth = constant_op.constant(truth)
-      truth_squeezed = array_ops.squeeze(truth, axis=axis)
-      output_array = self.evaluate(output)
-      output_keep_dims_array = self.evaluate(output_keep_dims)
-      truth_array = self.evaluate(truth)
-      truth_squeezed_array = self.evaluate(truth_squeezed)
+      truth_squeezed = array_ops.squeeze(truth, squeeze_dims=reduction_indices)
+      output_array = output.eval()
+      output_keep_dims_array = output_keep_dims.eval()
+      truth_array = truth.eval()
+      truth_squeezed_array = truth_squeezed.eval()
     self.assertAllEqualUnicode(truth_array, output_keep_dims_array)
     self.assertAllEqualUnicode(truth_squeezed_array, output_array)
     self.assertAllEqual(truth.get_shape(), output_keep_dims.get_shape())
@@ -163,7 +174,7 @@ class ReduceJoinTest(UnicodeTestCase):
     input_array = ["this", "is", "a", "test"]
     truth = "thisisatest"
     truth_shape = []
-    self._testReduceJoin(input_array, truth, truth_shape, axis=0)
+    self._testReduceJoin(input_array, truth, truth_shape, reduction_indices=0)
 
   def testRankTwo(self):
     input_array = [["this", "is", "a", "test"],
@@ -173,32 +184,43 @@ class ReduceJoinTest(UnicodeTestCase):
     truth_dim_one = ["thisisatest", "pleasedonotpanic"]
     truth_shape_dim_one = [2]
     self._testReduceJoin(
-        input_array, truth_dim_zero, truth_shape_dim_zero, axis=0)
+        input_array, truth_dim_zero, truth_shape_dim_zero, reduction_indices=0)
     self._testReduceJoin(
-        input_array, truth_dim_one, truth_shape_dim_one, axis=1)
+        input_array, truth_dim_one, truth_shape_dim_one, reduction_indices=1)
 
     expected_val = "thisisatestpleasedonotpanic"
-    expected_shape = []
-    self._testReduceJoin(input_array, expected_val, expected_shape, axis=None)
+    expected_shape = None
+    self._testReduceJoin(
+        input_array, expected_val, expected_shape, reduction_indices=None)
 
-    # Using axis=[] is a no-op.
+    # When using Tensor for input with reduction_indices=None, shape is known.
+    expected_val = "thisisatestpleasedonotpanic"
+    expected_shape = []
+    self._testReduceJoin(
+        constant_op.constant(input_array), expected_val,
+        expected_shape, reduction_indices=None)
+
+    # Using [] reduction_indices is a no-op.
     expected_val = input_array
     expected_shape = [2, 4]
-    self._testReduceJoin(input_array, expected_val, expected_shape, axis=[])
+    self._testReduceJoin(
+        input_array, expected_val, expected_shape, reduction_indices=[])
 
   def testRankFive(self):
     input_array = _input_array(num_dims=5)
     truths = [_joined_array(num_dims=5, reduce_dim=i) for i in xrange(5)]
     truth_shape = [2] * 4
     for i in xrange(5):
-      self._testReduceJoin(input_array, truths[i], truth_shape, axis=i)
+      self._testReduceJoin(
+          input_array, truths[i], truth_shape, reduction_indices=i)
 
   def testNegative(self):
     input_array = _input_array(num_dims=5)
     truths = [_joined_array(num_dims=5, reduce_dim=i) for i in xrange(5)]
     truth_shape = [2] * 4
     for i in xrange(5):
-      self._testReduceJoin(input_array, truths[i], truth_shape, axis=i - 5)
+      self._testReduceJoin(
+          input_array, truths[i], truth_shape, reduction_indices=i - 5)
 
   def testSingletonDimension(self):
     input_arrays = [
@@ -208,7 +230,8 @@ class ReduceJoinTest(UnicodeTestCase):
     truth = _input_array(num_dims=5)
     truth_shape = [2] * 5
     for i in xrange(6):
-      self._testReduceJoin(input_arrays[i], truth, truth_shape, axis=i)
+      self._testReduceJoin(
+          input_arrays[i], truth, truth_shape, reduction_indices=i)
 
   def testSeparator(self):
     input_array = [["this", "is", "a", "test"],
@@ -222,37 +245,36 @@ class ReduceJoinTest(UnicodeTestCase):
         input_array,
         truth_dim_zero,
         truth_shape_dim_zero,
-        axis=0,
+        reduction_indices=0,
         separator="  ")
     self._testReduceJoin(
         input_array,
         truth_dim_one,
         truth_shape_dim_one,
-        axis=1,
+        reduction_indices=1,
         separator="  ")
 
-  @test_util.run_deprecated_v1
   def testUnknownShape(self):
     input_array = [["a"], ["b"]]
     truth = ["ab"]
     truth_shape = None
-    with self.cached_session():
+    with self.test_session():
       placeholder = array_ops.placeholder(dtypes.string, name="placeholder")
-      reduced = string_ops.reduce_join(placeholder, axis=0)
+      reduced = string_ops.reduce_join(placeholder, reduction_indices=0)
       output_array = reduced.eval(feed_dict={placeholder.name: input_array})
       self.assertAllEqualUnicode(truth, output_array)
       self.assertAllEqual(truth_shape, reduced.get_shape())
 
-  @test_util.run_deprecated_v1
   def testUnknownIndices(self):
     input_array = [["this", "is", "a", "test"],
                    ["please", "do", "not", "panic"]]
     truth_dim_zero = ["thisplease", "isdo", "anot", "testpanic"]
     truth_dim_one = ["thisisatest", "pleasedonotpanic"]
     truth_shape = None
-    with self.cached_session():
+    with self.test_session():
       placeholder = array_ops.placeholder(dtypes.int32, name="placeholder")
-      reduced = string_ops.reduce_join(input_array, axis=placeholder)
+      reduced = string_ops.reduce_join(
+          input_array, reduction_indices=placeholder)
       output_array_dim_zero = reduced.eval(feed_dict={placeholder.name: [0]})
       output_array_dim_one = reduced.eval(feed_dict={placeholder.name: [1]})
       self.assertAllEqualUnicode(truth_dim_zero, output_array_dim_zero)
@@ -271,26 +293,27 @@ class ReduceJoinTest(UnicodeTestCase):
         input_array,
         truth_dim_zero,
         truth_shape_dim_zero,
-        axis=0,
+        reduction_indices=0,
         keep_dims=True)
     self._testReduceJoin(
         input_array,
         truth_dim_one,
         truth_shape_dim_one,
-        axis=1,
+        reduction_indices=1,
         keep_dims=True)
 
     expected_val = [["thisisatestpleasedonotpanic"]]
     expected_shape = [1, 1]
     self._testReduceJoin(
         constant_op.constant(input_array), expected_val, expected_shape,
-        keep_dims=True, axis=None)
+        keep_dims=True, reduction_indices=None)
 
-    # Using axis=[] is a no-op.
+    # Using [] reduction_indices is a no-op.
     expected_val = input_array
     expected_shape = [2, 4]
     self._testReduceJoin(
-        input_array, expected_val, expected_shape, keep_dims=True, axis=[])
+        input_array, expected_val, expected_shape,
+        keep_dims=True, reduction_indices=[])
 
   def testMultiIndex(self):
     num_dims = 3
@@ -298,68 +321,57 @@ class ReduceJoinTest(UnicodeTestCase):
     # Also tests [].
     for i in xrange(num_dims + 1):
       for permutation in itertools.permutations(xrange(num_dims), i):
-        self._testMultipleReduceJoin(input_array, axis=permutation)
+        self._testMultipleReduceJoin(input_array, reduction_indices=permutation)
 
-  @test_util.run_deprecated_v1
   def testInvalidReductionIndices(self):
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesRegexp(ValueError, "Invalid reduction dim"):
-        string_ops.reduce_join(inputs="", axis=0)
+        string_ops.reduce_join(inputs="", reduction_indices=0)
       with self.assertRaisesRegexp(ValueError,
                                    "Invalid reduction dimension -3"):
-        string_ops.reduce_join(inputs=[[""]], axis=-3)
+        string_ops.reduce_join(inputs=[[""]], reduction_indices=-3)
       with self.assertRaisesRegexp(ValueError, "Invalid reduction dimension 2"):
-        string_ops.reduce_join(inputs=[[""]], axis=2)
+        string_ops.reduce_join(inputs=[[""]], reduction_indices=2)
       with self.assertRaisesRegexp(ValueError,
                                    "Invalid reduction dimension -3"):
-        string_ops.reduce_join(inputs=[[""]], axis=[0, -3])
+        string_ops.reduce_join(inputs=[[""]], reduction_indices=[0, -3])
       with self.assertRaisesRegexp(ValueError, "Invalid reduction dimension 2"):
-        string_ops.reduce_join(inputs=[[""]], axis=[0, 2])
+        string_ops.reduce_join(inputs=[[""]], reduction_indices=[0, 2])
 
   def testZeroDims(self):
-    with self.cached_session():
+    with self.test_session():
       inputs = np.zeros([0, 1], dtype=str)
 
       # Reduction that drops the dim of size 0.
-      output = string_ops.reduce_join(inputs=inputs, axis=0)
-      self.assertAllEqualUnicode([""], self.evaluate(output))
+      output = string_ops.reduce_join(inputs=inputs, reduction_indices=0)
+      self.assertAllEqualUnicode([""], output.eval())
 
       # Reduction that keeps the dim of size 0.
-      output = string_ops.reduce_join(inputs=inputs, axis=1)
-      output_shape = self.evaluate(output).shape
+      output = string_ops.reduce_join(inputs=inputs, reduction_indices=1)
+      output_shape = output.eval().shape
       self.assertAllEqual([0], output_shape)
 
-  @test_util.run_deprecated_v1
   def testInvalidArgsUnknownShape(self):
-    with self.cached_session():
+    with self.test_session():
       placeholder = array_ops.placeholder(dtypes.string, name="placeholder")
-      index_too_high = string_ops.reduce_join(placeholder, axis=1)
-      duplicate_index = string_ops.reduce_join(placeholder, axis=[-1, 1])
+      index_too_high = string_ops.reduce_join(placeholder, reduction_indices=1)
+      duplicate_index = string_ops.reduce_join(
+          placeholder, reduction_indices=[-1, 1])
       with self.assertRaisesOpError("Invalid reduction dimension 1"):
         index_too_high.eval(feed_dict={placeholder.name: [""]})
       with self.assertRaisesOpError("Duplicate reduction dimension 1"):
         duplicate_index.eval(feed_dict={placeholder.name: [[""]]})
 
-  @test_util.run_deprecated_v1
   def testInvalidArgsUnknownIndices(self):
-    with self.cached_session():
+    with self.test_session():
       placeholder = array_ops.placeholder(dtypes.int32, name="placeholder")
-      reduced = string_ops.reduce_join(["test", "test2"], axis=placeholder)
+      reduced = string_ops.reduce_join(
+          ["test", "test2"], reduction_indices=placeholder)
 
       with self.assertRaisesOpError("reduction dimension -2"):
         reduced.eval(feed_dict={placeholder.name: -2})
       with self.assertRaisesOpError("reduction dimension 2"):
         reduced.eval(feed_dict={placeholder.name: 2})
-
-  def testDeprecatedArgs(self):
-    foobar = constant_op.constant(["foobar"])
-    # Old names: keep_dims and reduction_indices
-    output = string_ops.reduce_join(
-        ["foo", "bar"], reduction_indices=0, keep_dims=True)
-    self.assertAllEqual(foobar, output)
-    # New names keepdims and axis.
-    output = string_ops.reduce_join(["foo", "bar"], axis=0, keepdims=True)
-    self.assertAllEqual(foobar, output)
 
 
 if __name__ == "__main__":

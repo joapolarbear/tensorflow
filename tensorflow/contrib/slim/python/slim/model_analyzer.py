@@ -19,12 +19,11 @@ To analyze the operations in a graph:
   images, labels = LoadData(...)
   predictions = MyModel(images)
 
-  slim.model_analyzer.analyze_ops(tf.compat.v1.get_default_graph(),
-  print_info=True)
+  slim.model_analyzer.analyze_ops(tf.get_default_graph(), print_info=True)
 
 To analyze the model variables in a graph:
 
-  variables = tf.compat.v1.model_variables()
+  variables = tf.model_variables()
   slim.model_analyzer.analyze_vars(variables, print_info=False)
 """
 from __future__ import absolute_import
@@ -85,7 +84,7 @@ def analyze_vars(variables, print_info=False):
   """Prints the names and shapes of the variables.
 
   Args:
-    variables: list of variables, for example tf.compat.v1.global_variables().
+    variables: list of variables, for example tf.global_variables().
     print_info: Optional, if true print variables and their shape.
 
   Returns:
@@ -104,8 +103,8 @@ def analyze_vars(variables, print_info=False):
     total_size += var_size
     total_bytes += var_bytes
     if print_info:
-      print(var.name, tensor_description(var),
-            '[%d, bytes: %d]' % (var_size, var_bytes))
+      print(var.name, tensor_description(var), '[%d, bytes: %d]' %
+            (var_size, var_bytes))
   if print_info:
     print('Total size of variables: %d' % total_size)
     print('Total bytes of variables: %d' % total_bytes)

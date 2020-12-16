@@ -15,19 +15,28 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace internal {
 
-// The default implementation just calls the other HostCallback method.
-// It should make all existing code that uses a void() callback still work.
-bool StreamExecutorInterface::HostCallback(Stream* stream,
-                                           std::function<void()> callback) {
-  return HostCallback(
-      stream, std::function<port::Status()>([callback]() -> port::Status {
-        callback();
-        return port::Status::OK();
-      }));
+// -- CUDA
+
+StreamExecutorFactory* MakeCUDAExecutorImplementation() {
+  static StreamExecutorFactory instance;
+  return &instance;
 }
 
+// -- OpenCL
+
+StreamExecutorFactory* MakeOpenCLExecutorImplementation() {
+  static StreamExecutorFactory instance;
+  return &instance;
+}
+
+// -- Host
+
+StreamExecutorFactory MakeHostExecutorImplementation;
+
 }  // namespace internal
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
@@ -51,10 +51,9 @@ typedef TTypes<float>::Tensor::Index Index;
   DEFINE(T, R, 3, 2);               \
   DEFINE_IDENTITY(T, R)
 
-#define DEFINE_FOR_ALL_REDUCERS(T)                            \
-  DEFINE_FOR_TYPE_AND_R(T, Eigen::internal::SumReducer<T>);   \
-  DEFINE_FOR_TYPE_AND_R(T, functor::EuclideanNormReducer<T>); \
-  DEFINE_FOR_TYPE_AND_R(T, functor::MeanReducer<T>);
+#define DEFINE_FOR_ALL_REDUCERS(T)                          \
+  DEFINE_FOR_TYPE_AND_R(T, Eigen::internal::SumReducer<T>); \
+  DEFINE_FOR_TYPE_AND_R(T, Eigen::internal::MeanReducer<T>);
 
 DEFINE_FOR_ALL_REDUCERS(Eigen::half);
 #undef DEFINE_FOR_ALL_REDUCERS
@@ -64,4 +63,4 @@ DEFINE_FOR_ALL_REDUCERS(Eigen::half);
 }  // end namespace functor
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

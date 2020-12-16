@@ -21,12 +21,11 @@ limitations under the License.
 #include <sys/types.h>
 #endif
 #include <fstream>
-#include <utility>
-#include "absl/strings/match.h"
 #include "include/json/json.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/base64.h"
+#include "tensorflow/core/platform/cloud/curl_http_request.h"
 #include "tensorflow/core/platform/cloud/retrying_utils.h"
 #include "tensorflow/core/platform/env.h"
 
@@ -44,11 +43,6 @@ constexpr char kGoogleAuthTokenForTesting[] = "GOOGLE_AUTH_TOKEN_FOR_TESTING";
 
 // The environment variable which can override '~/.config/gcloud' if set.
 constexpr char kCloudSdkConfig[] = "CLOUDSDK_CONFIG";
-
-// The environment variable used to skip attempting to fetch GCE credentials:
-// setting this to 'true' (case insensitive) will skip attempting to contact
-// the GCE metadata service.
-constexpr char kNoGceCheck[] = "NO_GCE_CHECK";
 
 // The default path to the gcloud config folder, relative to the home folder.
 constexpr char kGCloudConfigFolder[] = ".config/gcloud/";
@@ -69,10 +63,15 @@ constexpr char kOAuthV4Url[] = "https://www.googleapis.com/oauth2/v4/token";
 
 // The URL to retrieve the auth bearer token when running in Google Compute
 // Engine.
-constexpr char kGceTokenPath[] = "instance/service-accounts/default/token";
+constexpr char kGceTokenUrl[] =
+    "http://metadata/computeMetadata/v1/instance/service-accounts/default/"
+    "token";
 
 // The authentication token scope to request.
 constexpr char kOAuthScope[] = "https://www.googleapis.com/auth/cloud-platform";
+
+// The default initial delay between retries with exponential backoff.
+constexpr int kInitialRetryDelayUsec = 500000;  // 0.5 sec
 
 /// Returns whether the given path points to a readable file.
 bool IsFile(const string& filename) {
@@ -122,26 +121,27 @@ Status GetWellKnownFileName(string* filename) {
 
 }  // namespace
 
-GoogleAuthProvider::GoogleAuthProvider(
-    std::shared_ptr<ComputeEngineMetadataClient> compute_engine_metadata_client)
-    : GoogleAuthProvider(std::unique_ptr<OAuthClient>(new OAuthClient()),
-                         std::move(compute_engine_metadata_client),
-                         Env::Default()) {}
+GoogleAuthProvider::GoogleAuthProvider()
+    : GoogleAuthProvider(
+          std::unique_ptr<OAuthClient>(new OAuthClient()),
+          std::unique_ptr<HttpRequest::Factory>(new CurlHttpRequest::Factory()),
+          Env::Default(), kInitialRetryDelayUsec) {}
 
 GoogleAuthProvider::GoogleAuthProvider(
     std::unique_ptr<OAuthClient> oauth_client,
-    std::shared_ptr<ComputeEngineMetadataClient> compute_engine_metadata_client,
-    Env* env)
+    std::unique_ptr<HttpRequest::Factory> http_request_factory, Env* env,
+    int64 initial_retry_delay_usec)
     : oauth_client_(std::move(oauth_client)),
-      compute_engine_metadata_client_(
-          std::move(compute_engine_metadata_client)),
-      env_(env) {}
+      http_request_factory_(std::move(http_request_factory)),
+      env_(env),
+      initial_retry_delay_usec_(initial_retry_delay_usec) {}
 
 Status GoogleAuthProvider::GetToken(string* t) {
   mutex_lock lock(mu_);
   const uint64 now_sec = env_->NowSeconds();
 
-  if (now_sec + kExpirationTimeMarginSec < expiration_timestamp_sec_) {
+  if (!current_token_.empty() &&
+      now_sec + kExpirationTimeMarginSec < expiration_timestamp_sec_) {
     *t = current_token_;
     return Status::OK();
   }
@@ -152,25 +152,10 @@ Status GoogleAuthProvider::GetToken(string* t) {
   }
 
   auto token_from_files_status = GetTokenFromFiles();
-  if (token_from_files_status.ok()) {
-    *t = current_token_;
-    return Status::OK();
-  }
+  auto token_from_gce_status =
+      token_from_files_status.ok() ? Status::OK() : GetTokenFromGce();
 
-  char* no_gce_check_var = std::getenv(kNoGceCheck);
-  bool skip_gce_check = no_gce_check_var != nullptr &&
-                        absl::EqualsIgnoreCase(no_gce_check_var, "true");
-  Status token_from_gce_status;
-  if (skip_gce_check) {
-    token_from_gce_status =
-        Status(error::CANCELLED,
-               strings::StrCat("GCE check skipped due to presence of $",
-                               kNoGceCheck, " environment variable."));
-  } else {
-    token_from_gce_status = GetTokenFromGce();
-  }
-
-  if (token_from_gce_status.ok()) {
+  if (token_from_files_status.ok() || token_from_gce_status.ok()) {
     *t = current_token_;
     return Status::OK();
   }
@@ -186,13 +171,8 @@ Status GoogleAuthProvider::GetToken(string* t) {
   // so return an empty token instead of failing.
   *t = "";
 
-  // We only want to keep returning our empty token if we've tried and failed
-  // the (potentially slow) task of detecting GCE.
-  if (skip_gce_check) {
-    expiration_timestamp_sec_ = 0;
-  } else {
-    expiration_timestamp_sec_ = UINT64_MAX;
-  }
+  // From now on, always return the empty token.
+  expiration_timestamp_sec_ = UINT64_MAX;
   current_token_ = "";
 
   return Status::OK();
@@ -227,19 +207,25 @@ Status GoogleAuthProvider::GetTokenFromFiles() {
 }
 
 Status GoogleAuthProvider::GetTokenFromGce() {
-  std::vector<char> response_buffer;
-  const uint64 request_timestamp_sec = env_->NowSeconds();
+  const auto get_token_from_gce = [this]() {
+    std::unique_ptr<HttpRequest> request(http_request_factory_->Create());
+    std::vector<char> response_buffer;
+    const uint64 request_timestamp_sec = env_->NowSeconds();
+    TF_RETURN_IF_ERROR(request->Init());
+    TF_RETURN_IF_ERROR(request->SetUri(kGceTokenUrl));
+    TF_RETURN_IF_ERROR(request->AddHeader("Metadata-Flavor", "Google"));
+    TF_RETURN_IF_ERROR(request->SetResultBuffer(&response_buffer));
+    TF_RETURN_IF_ERROR(request->Send());
+    StringPiece response =
+        StringPiece(&response_buffer[0], response_buffer.size());
 
-  TF_RETURN_IF_ERROR(compute_engine_metadata_client_->GetMetadata(
-      kGceTokenPath, &response_buffer));
-  StringPiece response =
-      StringPiece(&response_buffer[0], response_buffer.size());
-
-  TF_RETURN_IF_ERROR(oauth_client_->ParseOAuthResponse(
-      response, request_timestamp_sec, &current_token_,
-      &expiration_timestamp_sec_));
-
-  return Status::OK();
+    TF_RETURN_IF_ERROR(oauth_client_->ParseOAuthResponse(
+        response, request_timestamp_sec, &current_token_,
+        &expiration_timestamp_sec_));
+    return Status::OK();
+  };
+  return RetryingUtils::CallWithRetries(get_token_from_gce,
+                                        initial_retry_delay_usec_);
 }
 
 Status GoogleAuthProvider::GetTokenForTesting() {

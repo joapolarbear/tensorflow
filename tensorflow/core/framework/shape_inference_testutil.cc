@@ -33,6 +33,7 @@ Status ShapeInferenceTestutil::InferShapes(ShapeInferenceTestOp op,
   TF_RETURN_IF_ERROR(OpRegistry::Global()->LookUp(op.name, &op_reg_data));
 
   std::vector<string> ins_v = str_util::Split(ins, ';');
+  std::unique_ptr<const NodeDef> new_node_def;
 
   InferenceContext::ShapeManager manager;
   std::vector<ShapeHandle> in_shapes;
@@ -99,7 +100,7 @@ Status ShapeInferenceTestutil::InferShapes(ShapeInferenceTestOp op,
       }
     }
 
-    if (absl::StartsWith(expected, "in")) {
+    if (expected.starts_with("in")) {
       if (in_index == -1) {
         return Unknown(err_prefix,
                        " should have matched an input shape by "
@@ -134,8 +135,7 @@ Status ShapeInferenceTestutil::InferShapes(ShapeInferenceTestOp op,
     }
 
     // Verify the dimensions.
-    CHECK(absl::StartsWith(expected, "[") && str_util::EndsWith(expected, "]"))
-        << expected;
+    CHECK(expected.starts_with("[") && expected.ends_with("]")) << expected;
     expected.remove_prefix(1);
     expected.remove_suffix(1);
 
@@ -176,7 +176,7 @@ Status ShapeInferenceTestutil::InferShapes(ShapeInferenceTestOp op,
           return Unknown(err_prefix, " expected to be unknown but was ",
                          c.Value(out_dim), err_suffix);
         }
-      } else if (absl::StartsWith(expected_dim, "d")) {
+      } else if (expected_dim.starts_with("d")) {
         // Compare the dimension values.
         auto v = str_util::Split(expected_dim, '|');
         if (in_dim_idx.first == -1) {

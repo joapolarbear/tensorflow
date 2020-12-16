@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/core/framework/types.h"
 
 #include "tensorflow/core/framework/type_traits.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/protobuf.h"
 #include "tensorflow/core/platform/test.h"
 
@@ -71,8 +70,8 @@ TEST(TypesTest, kDataTypeRefOffset) {
       << "Extra reference enum "
       << enum_descriptor->FindValueByNumber(e_ref)->name()
       << " without corresponding base enum with value " << e;
-  ASSERT_LT(DataType_MAX, e_ref)
-      << "Gap in reference types, missing value for " << e_ref;
+  ASSERT_LT(DataType_MAX, e_ref) << "Gap in reference types, missing value for "
+                                 << e_ref;
 
   // Make sure there are no enums defined after the last regular type before
   // the first reference type.
@@ -141,8 +140,9 @@ TEST(TypesTest, ComplexTypes) {
 TEST(TypesTest, IntegerTypes) {
   for (auto dt : AllTypes()) {
     const string name = DataTypeString(dt);
+    const StringPiece n = name;
     EXPECT_EQ(DataTypeIsInteger(dt),
-              absl::StartsWith(name, "int") || absl::StartsWith(name, "uint"))
+              n.starts_with("int") || n.starts_with("uint"))
         << "DataTypeInteger failed for " << name;
   }
 }

@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_SLICE_OP_H_
-#define TENSORFLOW_CORE_KERNELS_SLICE_OP_H_
+#ifndef TENSORFLOW_KERNELS_SLICE_OP_H_
+#define TENSORFLOW_KERNELS_SLICE_OP_H_
 
 // Functor definition for SliceOp, must be compilable by nvcc.
 
@@ -23,6 +23,7 @@ limitations under the License.
 
 namespace tensorflow {
 namespace functor {
+
 
 template <typename Device, typename T, int NDIMS>
 struct Slice {
@@ -51,4 +52,4 @@ struct Slice {
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_SLICE_OP_H_
+#endif  // TENSORFLOW_KERNELS_SLICE_OP_H_

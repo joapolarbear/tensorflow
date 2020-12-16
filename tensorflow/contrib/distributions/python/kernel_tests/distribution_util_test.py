@@ -23,17 +23,10 @@ import itertools
 import numpy as np
 
 from tensorflow.contrib.distributions.python.ops import distribution_util
-from tensorflow.contrib.distributions.python.ops import mixture
-from tensorflow.contrib.distributions.python.ops import mixture_same_family
-from tensorflow.contrib.distributions.python.ops import mvn_diag
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import tensor_shape
-from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import random_ops
-from tensorflow.python.ops.distributions import categorical
-from tensorflow.python.ops.distributions import normal
 from tensorflow.python.ops.linalg import linear_operator_diag
 import tensorflow.python.ops.nn_grad  # pylint: disable=unused-import
 from tensorflow.python.platform import test
@@ -100,7 +93,7 @@ class MakeTrilScaleTest(test.TestCase):
   def _testLegalInputs(
       self, loc=None, shape_hint=None, scale_params=None):
     for args in _powerset(scale_params.items()):
-      with self.cached_session():
+      with self.test_session():
         args = dict(args)
 
         scale_args = dict({
@@ -143,19 +136,19 @@ class MakeTrilScaleTest(test.TestCase):
         })
 
   def testZeroTriU(self):
-    with self.cached_session():
+    with self.test_session():
       scale = distribution_util.make_tril_scale(scale_tril=[[1., 1], [1., 1.]])
       self.assertAllClose([[1., 0], [1., 1.]], scale.to_dense().eval())
 
   def testValidateArgs(self):
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesOpError("diagonal part must be non-zero"):
         scale = distribution_util.make_tril_scale(
             scale_tril=[[0., 1], [1., 1.]], validate_args=True)
         scale.to_dense().eval()
 
   def testAssertPositive(self):
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesOpError("diagonal part must be positive"):
         scale = distribution_util.make_tril_scale(
             scale_tril=[[-1., 1], [1., 1.]],
@@ -169,7 +162,7 @@ class MakeDiagScaleTest(test.TestCase):
   def _testLegalInputs(
       self, loc=None, shape_hint=None, scale_params=None):
     for args in _powerset(scale_params.items()):
-      with self.cached_session():
+      with self.test_session():
         args = dict(args)
 
         scale_args = dict({
@@ -204,14 +197,14 @@ class MakeDiagScaleTest(test.TestCase):
         })
 
   def testValidateArgs(self):
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesOpError("diagonal part must be non-zero"):
         scale = distribution_util.make_diag_scale(
             scale_diag=[[0., 1], [1., 1.]], validate_args=True)
         scale.to_dense().eval()
 
   def testAssertPositive(self):
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesOpError("diagonal part must be positive"):
         scale = distribution_util.make_diag_scale(
             scale_diag=[[-1., 1], [1., 1.]],
@@ -241,7 +234,7 @@ class ShapesFromLocAndScaleTest(test.TestCase):
     loc = constant_op.constant(np.zeros((2, 3)))
     diag = array_ops.placeholder(dtypes.float64)
     scale = linear_operator_diag.LinearOperatorDiag(diag)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       batch_shape, event_shape = sess.run(
           distribution_util.shapes_from_loc_and_scale(loc, scale),
           feed_dict={diag: np.ones((5, 1, 3))})
@@ -252,7 +245,7 @@ class ShapesFromLocAndScaleTest(test.TestCase):
     loc = array_ops.placeholder(dtypes.float64)
     diag = constant_op.constant(np.ones((5, 2, 3)))
     scale = linear_operator_diag.LinearOperatorDiag(diag)
-    with self.cached_session():
+    with self.test_session():
       batch_shape, event_shape = distribution_util.shapes_from_loc_and_scale(
           loc, scale)
       # batch_shape depends on both args, and so is dynamic.  Since loc did not
@@ -266,7 +259,7 @@ class ShapesFromLocAndScaleTest(test.TestCase):
     loc = array_ops.placeholder(dtypes.float64)
     diag = array_ops.placeholder(dtypes.float64)
     scale = linear_operator_diag.LinearOperatorDiag(diag)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       batch_shape, event_shape = sess.run(
           distribution_util.shapes_from_loc_and_scale(loc, scale),
           feed_dict={diag: np.ones((5, 2, 3)), loc: np.zeros((2, 3))})
@@ -286,7 +279,7 @@ class ShapesFromLocAndScaleTest(test.TestCase):
     loc = None
     diag = array_ops.placeholder(dtypes.float64)
     scale = linear_operator_diag.LinearOperatorDiag(diag)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       batch_shape, event_shape = sess.run(
           distribution_util.shapes_from_loc_and_scale(loc, scale),
           feed_dict={diag: np.ones((5, 1, 3))})
@@ -307,7 +300,7 @@ class GetBroadcastShapeTest(test.TestCase):
     x = array_ops.ones((2, 1, 3))
     y = array_ops.placeholder(x.dtype)
     z = array_ops.ones(())
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       bcast_shape = sess.run(
           distribution_util.get_broadcast_shape(x, y, z),
           feed_dict={y: np.ones((1, 5, 3)).astype(np.float32)})
@@ -317,7 +310,7 @@ class GetBroadcastShapeTest(test.TestCase):
 class TridiagTest(test.TestCase):
 
   def testWorksCorrectlyNoBatches(self):
-    with self.cached_session():
+    with self.test_session():
       self.assertAllEqual(
           [[4., 8., 0., 0.],
            [1., 5., 9., 0.],
@@ -329,7 +322,7 @@ class TridiagTest(test.TestCase):
               [8., 9., 10.]).eval())
 
   def testWorksCorrectlyBatches(self):
-    with self.cached_session():
+    with self.test_session():
       self.assertAllClose(
           [[[4., 8., 0., 0.],
             [1., 5., 9., 0.],
@@ -349,7 +342,7 @@ class TridiagTest(test.TestCase):
           rtol=1e-5, atol=0.)
 
   def testHandlesNone(self):
-    with self.cached_session():
+    with self.test_session():
       self.assertAllClose(
           [[[4., 0., 0., 0.],
             [0., 5., 0., 0.],
@@ -396,45 +389,10 @@ class MixtureStddevTest(test.TestCase):
                                                means_tf,
                                                sigmas_tf)
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       actual_devs = sess.run(mix_dev)
 
     self.assertAllClose(actual_devs, expected_devs)
-
-
-class PadMixtureDimensionsTest(test.TestCase):
-
-  def test_pad_mixture_dimensions_mixture(self):
-    with self.cached_session() as sess:
-      gm = mixture.Mixture(
-          cat=categorical.Categorical(probs=[[0.3, 0.7]]),
-          components=[
-              normal.Normal(loc=[-1.0], scale=[1.0]),
-              normal.Normal(loc=[1.0], scale=[0.5])
-          ])
-
-      x = array_ops.constant([[1.0, 2.0], [3.0, 4.0]])
-      x_pad = distribution_util.pad_mixture_dimensions(
-          x, gm, gm.cat, gm.event_shape.ndims)
-      x_out, x_pad_out = sess.run([x, x_pad])
-
-    self.assertAllEqual(x_pad_out.shape, [2, 2])
-    self.assertAllEqual(x_out.reshape([-1]), x_pad_out.reshape([-1]))
-
-  def test_pad_mixture_dimensions_mixture_same_family(self):
-    with self.cached_session() as sess:
-      gm = mixture_same_family.MixtureSameFamily(
-          mixture_distribution=categorical.Categorical(probs=[0.3, 0.7]),
-          components_distribution=mvn_diag.MultivariateNormalDiag(
-              loc=[[-1., 1], [1, -1]], scale_identity_multiplier=[1.0, 0.5]))
-
-      x = array_ops.constant([[1.0, 2.0], [3.0, 4.0]])
-      x_pad = distribution_util.pad_mixture_dimensions(
-          x, gm, gm.mixture_distribution, gm.event_shape.ndims)
-      x_out, x_pad_out = sess.run([x, x_pad])
-
-    self.assertAllEqual(x_pad_out.shape, [2, 2, 1])
-    self.assertAllEqual(x_out.reshape([-1]), x_pad_out.reshape([-1]))
 
 
 class _PadTest(object):
@@ -444,7 +402,7 @@ class _PadTest(object):
                      [4, 5, 6]])
     value_ = np.float32(0.25)
     count_ = np.int32(2)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       x = array_ops.placeholder_with_default(
           x_, shape=x_.shape if self.is_static_shape else None)
       value = (constant_op.constant(value_) if self.is_static_shape
@@ -491,7 +449,7 @@ class _PadTest(object):
                      [4, 5, 6]])
     value_ = np.float32(0.25)
     count_ = np.int32(2)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       x = array_ops.placeholder_with_default(
           x_, shape=x_.shape if self.is_static_shape else None)
       value = (constant_op.constant(value_) if self.is_static_shape
@@ -540,51 +498,6 @@ class PadDynamicTest(_PadTest, test.TestCase):
   @property
   def is_static_shape(self):
     return False
-
-
-@test_util.run_all_in_graph_and_eager_modes
-class TestMoveDimension(test.TestCase):
-
-  def test_move_dimension_static_shape(self):
-
-    x = random_ops.random_normal(shape=[200, 30, 4, 1, 6])
-
-    x_perm = distribution_util.move_dimension(x, 1, 1)
-    self.assertAllEqual(x_perm.shape.as_list(), [200, 30, 4, 1, 6])
-
-    x_perm = distribution_util.move_dimension(x, 0, 3)
-    self.assertAllEqual(x_perm.shape.as_list(), [30, 4, 1, 200, 6])
-
-    x_perm = distribution_util.move_dimension(x, 0, -2)
-    self.assertAllEqual(x_perm.shape.as_list(), [30, 4, 1, 200, 6])
-
-    x_perm = distribution_util.move_dimension(x, 4, 2)
-    self.assertAllEqual(x_perm.shape.as_list(), [200, 30, 6, 4, 1])
-
-  def test_move_dimension_dynamic_shape(self):
-
-    x_ = random_ops.random_normal(shape=[200, 30, 4, 1, 6])
-    x = array_ops.placeholder_with_default(input=x_, shape=None)
-
-    x_perm = distribution_util.move_dimension(x, 1, 1)
-    self.assertAllEqual(self.evaluate(array_ops.shape(x_perm)),
-                        [200, 30, 4, 1, 6])
-
-    x_perm = distribution_util.move_dimension(x, 0, 3)
-    self.assertAllEqual(self.evaluate(array_ops.shape(x_perm)),
-                        [30, 4, 1, 200, 6])
-
-    x_perm = distribution_util.move_dimension(x, 0, -2)
-    self.assertAllEqual(self.evaluate(array_ops.shape(x_perm)),
-                        [30, 4, 1, 200, 6])
-
-    x_perm = distribution_util.move_dimension(x, 4, 2)
-    self.assertAllEqual(self.evaluate(array_ops.shape(x_perm)),
-                        [200, 30, 6, 4, 1])
-
-    x_perm = distribution_util.move_dimension(x, -1, 2)
-    self.assertAllEqual(self.evaluate(array_ops.shape(x_perm)),
-                        [200, 30, 6, 4, 1])
 
 
 if __name__ == "__main__":

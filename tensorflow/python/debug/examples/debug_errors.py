@@ -19,14 +19,11 @@ from __future__ import print_function
 
 import argparse
 import sys
-import tempfile
 
 import numpy as np
-import tensorflow
+import tensorflow as tf
 
 from tensorflow.python import debug as tf_debug
-
-tf = tensorflow.compat.v1
 
 
 def main(_):
@@ -44,12 +41,7 @@ def main(_):
   z = tf.matmul(m, v, name="z")
 
   if FLAGS.debug:
-    config_file_path = (tempfile.mktemp(".tfdbg_config")
-                        if FLAGS.use_random_config_path else None)
-    sess = tf_debug.LocalCLIDebugWrapperSession(
-        sess,
-        ui_type=FLAGS.ui_type,
-        config_file_path=config_file_path)
+    sess = tf_debug.LocalCLIDebugWrapperSession(sess, ui_type=FLAGS.ui_type)
 
   if FLAGS.error == "shape_mismatch":
     print(sess.run(y, feed_dict={ph_float: np.array([[0.0], [1.0], [2.0]])}))
@@ -84,14 +76,5 @@ if __name__ == "__main__":
       const=True,
       default=False,
       help="Use debugger to track down bad values during training")
-  parser.add_argument(
-      "--use_random_config_path",
-      type="bool",
-      nargs="?",
-      const=True,
-      default=False,
-      help="""If set, set config file path to a random file in the temporary
-      directory.""")
   FLAGS, unparsed = parser.parse_known_args()
-  with tf.Graph().as_default():
-    tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+  tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)

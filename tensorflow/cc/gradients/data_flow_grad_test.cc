@@ -23,12 +23,9 @@ limitations under the License.
 #include "tensorflow/core/lib/random/random.h"
 
 namespace tensorflow {
-namespace {
+using namespace ops;  // NOLINT(build/namespaces)
 
-using ops::Const;
-using ops::DynamicPartition;
-using ops::DynamicStitch;
-using ops::Placeholder;
+namespace {
 
 class DataFlowGradTest : public ::testing::Test {
  protected:

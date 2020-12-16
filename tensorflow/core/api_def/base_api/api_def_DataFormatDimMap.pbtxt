@@ -3,14 +3,13 @@ op {
   in_arg {
     name: "x"
     description: <<END
-A Tensor with each element as a dimension index in source data format.
-Must be in the range [-4, 4).
+Scalar. Dimension index in source data format. Must be in the range [-4, 4).
 END
   }
   out_arg {
     name: "y"
     description: <<END
-A Tensor with each element as a dimension index in destination data format.
+Scalar. Dimension index in destination data format.
 END
   }
   attr {

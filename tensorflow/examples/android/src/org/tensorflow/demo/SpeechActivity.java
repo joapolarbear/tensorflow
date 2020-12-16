@@ -31,8 +31,7 @@ the RecognizeCommands helper class.
 
 package org.tensorflow.demo;
 
-import android.animation.AnimatorInflater;
-import android.animation.AnimatorSet;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
@@ -330,13 +329,17 @@ public class SpeechActivity extends Activity {
                     labelIndex = i;
                   }
                 }
-                final View labelView = labelsListView.getChildAt(labelIndex - 2);
-
-                AnimatorSet colorAnimation =
-                    (AnimatorSet)
-                        AnimatorInflater.loadAnimator(
-                            SpeechActivity.this, R.animator.color_animation);
-                colorAnimation.setTarget(labelView);
+                final View labelView = (View) labelsListView.getChildAt(labelIndex - 2);
+                ValueAnimator colorAnimation =
+                     ValueAnimator.ofArgb(0x00b3ccff, 0xffb3ccff, 0x00b3ccff);
+                colorAnimation.setDuration(750);
+                colorAnimation.addUpdateListener(
+                    new ValueAnimator.AnimatorUpdateListener() {
+                      @Override
+                      public void onAnimationUpdate(ValueAnimator animator) {
+                        labelView.setBackgroundColor((int) animator.getAnimatedValue());
+                      }
+                    });
                 colorAnimation.start();
               }
             }

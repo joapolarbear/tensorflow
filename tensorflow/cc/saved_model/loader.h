@@ -15,8 +15,8 @@ limitations under the License.
 
 /// SavedModel loading functions and SavedModelBundle struct.
 
-#ifndef TENSORFLOW_CC_SAVED_MODEL_LOADER_H_
-#define TENSORFLOW_CC_SAVED_MODEL_LOADER_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CC_SAVED_MODEL_LOADER_H_
+#define THIRD_PARTY_TENSORFLOW_CC_SAVED_MODEL_LOADER_H_
 
 #include <string>
 #include <unordered_set>
@@ -61,4 +61,4 @@ bool MaybeSavedModelDirectory(const string& export_dir);
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CC_SAVED_MODEL_LOADER_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CC_SAVED_MODEL_LOADER_H_

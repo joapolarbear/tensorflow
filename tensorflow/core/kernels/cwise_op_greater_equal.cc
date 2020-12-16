@@ -16,9 +16,9 @@ limitations under the License.
 #include "tensorflow/core/kernels/cwise_ops_common.h"
 
 namespace tensorflow {
-REGISTER9(BinaryOp, CPU, "GreaterEqual", functor::greater_equal, float,
-          Eigen::half, double, int32, int64, uint8, int8, int16, bfloat16);
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+REGISTER8(BinaryOp, CPU, "GreaterEqual", functor::greater_equal, float,
+          Eigen::half, double, int32, int64, uint8, int8, int16);
+#if GOOGLE_CUDA
 REGISTER7(BinaryOp, GPU, "GreaterEqual", functor::greater_equal, float,
           Eigen::half, double, int64, uint8, int8, int16);
 
@@ -35,8 +35,7 @@ REGISTER_KERNEL_BUILDER(Name("GreaterEqual")
 #endif
 
 #ifdef TENSORFLOW_USE_SYCL
-REGISTER2(BinaryOp, SYCL, "GreaterEqual", functor::greater_equal, float,
-          double);
+REGISTER2(BinaryOp, SYCL, "GreaterEqual", functor::greater_equal, float, double);
 
 REGISTER_KERNEL_BUILDER(Name("GreaterEqual")
                             .Device(DEVICE_SYCL)
@@ -45,5 +44,5 @@ REGISTER_KERNEL_BUILDER(Name("GreaterEqual")
                             .HostMemory("z")
                             .TypeConstraint<int32>("T"),
                         BinaryOp<CPUDevice, functor::greater_equal<int32>>);
-#endif  // TENSORFLOW_USE_SYCL
+#endif // TENSORFLOW_USE_SYCL
 }  // namespace tensorflow

@@ -37,7 +37,7 @@ class LLVMCompiler : public Compiler {
   // A callback of this type can be run before and/or after IR-level
   // optimization to e.g. dump out the generated IR to disk or gather some
   // statistics.
-  using ModuleHook = std::function<void(const llvm::Module&)>;
+  using ModuleHook = std::function<Status(const llvm::Module&)>;
 
   void SetPreOptimizationHook(ModuleHook hook) {
     CHECK(!user_pre_optimization_hook_)
@@ -60,19 +60,17 @@ class LLVMCompiler : public Compiler {
   // Bring in
   //   StatusOr<std::unique_ptr<Executable>> RunBackend(
   //       std::unique_ptr<HloModule> module,
-  //       se::StreamExecutor* stream_exec,
-  //       se::DeviceMemoryAllocator* device_allocator)
+  //       perftools::gputools::StreamExecutor* stream_exec)
   //   StatusOr<std::unique_ptr<HloModule>> RunHloPasses(
   //       std::unique_ptr<HloModule> module,
-  //       se::StreamExecutor* stream_exec,
-  //       se::DeviceMemoryAllocator* device_allocator)
+  //       perftools::gputools::StreamExecutor* stream_exec)
   using Compiler::RunBackend;
   using Compiler::RunHloPasses;
 
   StatusOr<std::vector<std::unique_ptr<Executable>>> Compile(
-      std::unique_ptr<HloModuleGroup> module_group,
-      std::vector<std::vector<se::StreamExecutor*>> stream_execs,
-      se::DeviceMemoryAllocator* device_allocator) override;
+      std::vector<std::unique_ptr<HloModule>> modules,
+      std::vector<std::vector<perftools::gputools::StreamExecutor*>>
+          stream_execs) override;
 
  protected:
   ModuleHook user_pre_optimization_hook_;

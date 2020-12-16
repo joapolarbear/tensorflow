@@ -14,41 +14,41 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/lib/path.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
+#include "tensorflow/stream_executor/lib/strcat.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace port {
 namespace internal {
 
-static bool IsAbsolutePath(absl::string_view path) {
+static bool IsAbsolutePath(port::StringPiece path) {
   return !path.empty() && path[0] == '/';
 }
 
 // For an array of paths of length count, append them all together,
 // ensuring that the proper path separators are inserted between them.
-string JoinPathImpl(std::initializer_list<absl::string_view> paths) {
+string JoinPathImpl(std::initializer_list<port::StringPiece> paths) {
   string result;
 
-  for (absl::string_view path : paths) {
+  for (port::StringPiece path : paths) {
     if (path.empty()) continue;
 
     if (result.empty()) {
-      result = string(path);
+      result = path.ToString();
       continue;
     }
 
     if (result[result.size() - 1] == '/') {
       if (IsAbsolutePath(path)) {
-        absl::StrAppend(&result, path.substr(1));
+        StrAppend(&result, path.substr(1));
       } else {
-        absl::StrAppend(&result, path);
+        StrAppend(&result, path);
       }
     } else {
       if (IsAbsolutePath(path)) {
-        absl::StrAppend(&result, path);
+        StrAppend(&result, path);
       } else {
-        absl::StrAppend(&result, "/", path);
+        StrAppend(&result, "/", path);
       }
     }
   }
@@ -58,4 +58,5 @@ string JoinPathImpl(std::initializer_list<absl::string_view> paths) {
 
 }  // namespace internal
 }  // namespace port
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

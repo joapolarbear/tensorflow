@@ -13,6 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "tensorflow/core/platform/device_tracer.h"
+
 #include <map>
 #include <memory>
 #include <string>
@@ -34,21 +36,10 @@ limitations under the License.
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/platform/test.h"
-#include "tensorflow/core/profiler/internal/profiler_interface.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tensorflow/core/util/device_name_utils.h"
 
 namespace tensorflow {
-
-#if GOOGLE_CUDA
-std::unique_ptr<profiler::ProfilerInterface> CreateDeviceTracer();
-#else
-// We don't have device tracer for non-cuda case.
-std::unique_ptr<profiler::ProfilerInterface> CreateDeviceTracer() {
-  return nullptr;
-}
-#endif
-
 namespace {
 
 std::unique_ptr<Session> CreateSession() {
@@ -86,8 +77,7 @@ class DeviceTracerTest : public ::testing::Test {
 
     Node* y_neg = test::graph::Unary(&graph, "Neg", i);
     y_neg_ = y_neg->name();
-    y_neg->set_assigned_device_name(
-        "/job:localhost/replica:0/task:0/device:GPU:0");
+    y_neg->set_assigned_device_name("/job:localhost/replica:0/task:0/device:GPU:0");
 
     test::graph::ToGraphDef(&graph, &def_);
   }
@@ -108,40 +98,42 @@ class DeviceTracerTest : public ::testing::Test {
 };
 
 TEST_F(DeviceTracerTest, StartStop) {
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
   TF_EXPECT_OK(tracer->Start());
   TF_EXPECT_OK(tracer->Stop());
 }
 
 TEST_F(DeviceTracerTest, StopBeforeStart) {
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
   TF_EXPECT_OK(tracer->Stop());
   TF_EXPECT_OK(tracer->Stop());
 }
 
 TEST_F(DeviceTracerTest, CollectBeforeStart) {
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
-  RunMetadata run_metadata;
-  TF_EXPECT_OK(tracer->CollectData(&run_metadata));
-  EXPECT_EQ(run_metadata.step_stats().dev_stats_size(), 0);
+  StepStats stats;
+  StepStatsCollector collector(&stats);
+  TF_EXPECT_OK(tracer->Collect(&collector));
+  EXPECT_EQ(stats.dev_stats_size(), 0);
 }
 
 TEST_F(DeviceTracerTest, CollectBeforeStop) {
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
   TF_EXPECT_OK(tracer->Start());
-  RunMetadata run_metadata;
-  Status status = tracer->CollectData(&run_metadata);
+  StepStats stats;
+  StepStatsCollector collector(&stats);
+  Status status = tracer->Collect(&collector);
   ExpectFailure(status, tensorflow::error::FAILED_PRECONDITION);
   TF_EXPECT_OK(tracer->Stop());
 }
 
 TEST_F(DeviceTracerTest, StartTwoTracers) {
-  auto tracer1 = CreateDeviceTracer();
-  auto tracer2 = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer1(CreateDeviceTracer());
+  std::unique_ptr<DeviceTracer> tracer2(CreateDeviceTracer());
   if (!tracer1 || !tracer2) return;
 
   TF_EXPECT_OK(tracer1->Start());
@@ -154,7 +146,7 @@ TEST_F(DeviceTracerTest, StartTwoTracers) {
 
 TEST_F(DeviceTracerTest, RunWithTracer) {
   // On non-GPU platforms, we may not support DeviceTracer.
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
 
   Initialize({3, 2, -1, 0});
@@ -181,7 +173,7 @@ TEST_F(DeviceTracerTest, RunWithTracer) {
 }
 
 TEST_F(DeviceTracerTest, TraceToStepStatsCollector) {
-  auto tracer = CreateDeviceTracer();
+  std::unique_ptr<DeviceTracer> tracer(CreateDeviceTracer());
   if (!tracer) return;
 
   Initialize({3, 2, -1, 0});
@@ -200,12 +192,13 @@ TEST_F(DeviceTracerTest, TraceToStepStatsCollector) {
   TF_ASSERT_OK(s);
 
   TF_ASSERT_OK(tracer->Stop());
-  RunMetadata run_metadata;
-  TF_ASSERT_OK(tracer->CollectData(&run_metadata));
+  StepStats stats;
+  StepStatsCollector collector(&stats);
+  TF_ASSERT_OK(tracer->Collect(&collector));
+  collector.Finalize();
   // Depending on whether this runs on CPU or GPU, we will have a
   // different number of devices.
-  EXPECT_GE(run_metadata.step_stats().dev_stats_size(), 1)
-      << "Saw stats: " << run_metadata.DebugString();
+  EXPECT_GE(stats.dev_stats_size(), 1) << "Saw stats: " << stats.DebugString();
 }
 
 TEST_F(DeviceTracerTest, RunWithTraceOption) {

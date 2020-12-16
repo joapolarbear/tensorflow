@@ -37,7 +37,7 @@ for detecting the running MPI configuration.
 Example:
 
 ```python
-import tensorflow.contrib.mpi_collectives as mpi
+from tensorflow.contrib import mpi
 
 # Use `mpi.Session` instead of `tf.Session`
 with mpi.Session() as session:
@@ -48,10 +48,8 @@ with mpi.Session() as session:
         print("MPI Size:", session.run(mpi.size()))
 ```
 
-@@init
-@@size
 @@rank
-@@local_rank
+@@size
 
 ### Ring Allreduce and Allgather
 
@@ -125,12 +123,12 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import init
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import size
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import rank
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import local_rank
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import allgather
-from tensorflow.contrib.mpi_collectives.python.ops.mpi_ops import _allreduce
+from tensorflow.contrib.mpi_collectives.mpi_ops import size
+from tensorflow.contrib.mpi_collectives.mpi_ops import rank
+from tensorflow.contrib.mpi_collectives.mpi_ops import local_rank
+from tensorflow.contrib.mpi_collectives.mpi_ops import allgather
+from tensorflow.contrib.mpi_collectives.mpi_ops import _allreduce
+from tensorflow.contrib.mpi_collectives.mpi_ops import init
 
 
 def allreduce(tensor, average=True):

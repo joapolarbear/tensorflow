@@ -13,8 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/core/kernels/function_ops.h"
-
 #include <deque>
 #include <vector>
 
@@ -22,74 +20,91 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/executor.h"
 #include "tensorflow/core/common_runtime/function.h"
 #include "tensorflow/core/common_runtime/memory_types.h"
+#include "tensorflow/core/framework/function.h"
 #include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/graph/algorithm.h"
 #include "tensorflow/core/graph/gradients.h"
 #include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/platform/macros.h"
-#include "tensorflow/core/platform/tracing.h"
-#include "tensorflow/core/profiler/lib/traceme.h"
 #include "tensorflow/core/util/device_name_utils.h"
 
 namespace tensorflow {
 
-static const char* const kGradientOp = FunctionLibraryDefinition::kGradientOp;
+static const char* const kGradientOp = "SymbolicGradient";
 
-ArgOp::ArgOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("T", &dtype_));
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("index", &index_));
-}
+class ArgOp : public OpKernel {
+ public:
+  explicit ArgOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("T", &dtype_));
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("index", &index_));
+  }
 
-void ArgOp::Compute(OpKernelContext* ctx) {
-  auto frame = ctx->call_frame();
-  OP_REQUIRES(ctx, frame != nullptr, errors::Internal("no call frame"));
-  Tensor val;
-  OP_REQUIRES_OK(ctx, frame->GetArg(index_, &val));
-  OP_REQUIRES(ctx, val.dtype() == dtype_,
-              errors::InvalidArgument("Type mismatch: actual ",
-                                      DataTypeString(val.dtype()),
-                                      " vs. expect ", DataTypeString(dtype_)));
-  ctx->set_output(0, val);
-}
+  void Compute(OpKernelContext* ctx) override {
+    auto frame = ctx->call_frame();
+    OP_REQUIRES(ctx, frame != nullptr, errors::Internal("no call frame"));
+    Tensor val;
+    OP_REQUIRES_OK(ctx, frame->GetArg(index_, &val));
+    OP_REQUIRES(ctx, val.dtype() == dtype_,
+                errors::InvalidArgument(
+                    "Type mismatch: actual ", DataTypeString(val.dtype()),
+                    " vs. expect ", DataTypeString(dtype_)));
+    ctx->set_output(0, val);
+  }
 
-RetvalOp::RetvalOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("T", &dtype_));
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("index", &index_));
-}
+ private:
+  int index_;
+  DataType dtype_;
 
-void RetvalOp::Compute(OpKernelContext* ctx) {
-  const Tensor& val = ctx->input(0);
-  OP_REQUIRES(ctx, val.dtype() == dtype_,
-              errors::InvalidArgument("Type mismatch: actual ",
-                                      DataTypeString(val.dtype()),
-                                      " vs. expect ", DataTypeString(dtype_)));
-  auto frame = ctx->call_frame();
-  OP_REQUIRES(ctx, frame != nullptr, errors::Internal("no call frame"));
-  OP_REQUIRES_OK(ctx, frame->SetRetval(index_, val));
-}
+  TF_DISALLOW_COPY_AND_ASSIGN(ArgOp);
+};
 
-REGISTER_SYSTEM_KERNEL_BUILDER(Name(kArgOp).Device(DEVICE_CPU), ArgOp);
-REGISTER_SYSTEM_KERNEL_BUILDER(Name(kDeviceArgOp).Device(DEVICE_CPU), ArgOp);
-REGISTER_SYSTEM_KERNEL_BUILDER(Name(kRetOp).Device(DEVICE_CPU), RetvalOp);
-REGISTER_SYSTEM_KERNEL_BUILDER(Name(kDeviceRetOp).Device(DEVICE_CPU), RetvalOp);
+class RetvalOp : public OpKernel {
+ public:
+  explicit RetvalOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("T", &dtype_));
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("index", &index_));
+  }
+
+  void Compute(OpKernelContext* ctx) override {
+    const Tensor& val = ctx->input(0);
+    OP_REQUIRES(ctx, val.dtype() == dtype_,
+                errors::InvalidArgument(
+                    "Type mismatch: actual ", DataTypeString(val.dtype()),
+                    " vs. expect ", DataTypeString(dtype_)));
+    auto frame = ctx->call_frame();
+    OP_REQUIRES(ctx, frame != nullptr, errors::Internal("no call frame"));
+    OP_REQUIRES_OK(ctx, frame->SetRetval(index_, val));
+  }
+
+ private:
+  int index_;
+  DataType dtype_;
+
+  TF_DISALLOW_COPY_AND_ASSIGN(RetvalOp);
+};
+
+REGISTER_SYSTEM_KERNEL_BUILDER(Name("_Arg").Device(DEVICE_CPU), ArgOp);
+REGISTER_SYSTEM_KERNEL_BUILDER(Name("_Retval").Device(DEVICE_CPU), RetvalOp);
 
 #if TENSORFLOW_USE_SYCL
 #define REGISTER(type)     \
   REGISTER_KERNEL_BUILDER( \
-      Name(kArgOp).Device(DEVICE_SYCL).TypeConstraint<type>("T"), ArgOp);
+      Name("_Arg").Device(DEVICE_SYCL).TypeConstraint<type>("T"), ArgOp);
 TF_CALL_NUMBER_TYPES_NO_INT32(REGISTER)
-TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name(kArgOp)
+TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name("_Arg")
                                                    .Device(DEVICE_SYCL)
                                                    .HostMemory("output")
                                                    .TypeConstraint<int32>("T"),
                                                ArgOp);
 #undef REGISTER
-#define REGISTER(type)     \
-  REGISTER_KERNEL_BUILDER( \
-      Name(kRetOp).Device(DEVICE_SYCL).TypeConstraint<type>("T"), RetvalOp);
+#define REGISTER(type)                                               \
+  REGISTER_KERNEL_BUILDER(                                           \
+      Name("_Retval").Device(DEVICE_SYCL).TypeConstraint<type>("T"), \
+      RetvalOp);
 TF_CALL_NUMBER_TYPES_NO_INT32(REGISTER)
-TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name(kRetOp)
+TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name("_Retval")
                                                    .Device(DEVICE_SYCL)
                                                    .HostMemory("input")
                                                    .TypeConstraint<int32>("T"),
@@ -99,58 +114,30 @@ TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name(kRetOp)
 
 #define REGISTER(type)     \
   REGISTER_KERNEL_BUILDER( \
-      Name(kArgOp).Device(DEVICE_GPU).TypeConstraint<type>("T"), ArgOp);
+      Name("_Arg").Device(DEVICE_GPU).TypeConstraint<type>("T"), ArgOp);
 TF_CALL_NUMBER_TYPES_NO_INT32(REGISTER)
-TF_CALL_QUANTIZED_TYPES(REGISTER)
-TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name(kArgOp)
+TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name("_Arg")
                                                    .Device(DEVICE_GPU)
                                                    .HostMemory("output")
                                                    .TypeConstraint<int32>("T"),
                                                ArgOp);
-REGISTER_KERNEL_BUILDER(
-    Name(kDeviceArgOp).Device(DEVICE_GPU).TypeConstraint<int32>("T"), ArgOp);
 #undef REGISTER
 
-REGISTER_KERNEL_BUILDER(Name(kArgOp)
+REGISTER_KERNEL_BUILDER(Name("_Arg")
                             .Device(DEVICE_GPU)
                             .HostMemory("output")
                             .TypeConstraint<ResourceHandle>("T"),
                         ArgOp);
 
-REGISTER_KERNEL_BUILDER(Name(kArgOp)
-                            .Device(DEVICE_GPU)
-                            .HostMemory("output")
-                            .TypeConstraint<tstring>("T"),
-                        ArgOp);
-
-REGISTER_KERNEL_BUILDER(
-    Name(kArgOp).Device(DEVICE_GPU).TypeConstraint<Variant>("T"), ArgOp);
-
 #define REGISTER(type)     \
   REGISTER_KERNEL_BUILDER( \
-      Name(kRetOp).Device(DEVICE_GPU).TypeConstraint<type>("T"), RetvalOp);
+      Name("_Retval").Device(DEVICE_GPU).TypeConstraint<type>("T"), RetvalOp);
 TF_CALL_NUMBER_TYPES_NO_INT32(REGISTER)
-TF_CALL_QUANTIZED_TYPES(REGISTER)
-REGISTER(Variant)
-TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name(kRetOp)
+TF_CALL_bool(REGISTER) REGISTER_KERNEL_BUILDER(Name("_Retval")
                                                    .Device(DEVICE_GPU)
                                                    .HostMemory("input")
                                                    .TypeConstraint<int32>("T"),
                                                RetvalOp);
-REGISTER_KERNEL_BUILDER(
-    Name(kDeviceRetOp).Device(DEVICE_GPU).TypeConstraint<int32>("T"), RetvalOp);
-
-REGISTER_KERNEL_BUILDER(Name(kRetOp)
-                            .Device(DEVICE_GPU)
-                            .TypeConstraint<ResourceHandle>("T")
-                            .HostMemory("input"),
-                        RetvalOp);
-
-REGISTER_KERNEL_BUILDER(Name(kRetOp)
-                            .Device(DEVICE_GPU)
-                            .TypeConstraint<tstring>("T")
-                            .HostMemory("input"),
-                        RetvalOp);
 #undef REGISTER
 
 class PassOn : public OpKernel {
@@ -250,40 +237,34 @@ class SymbolicGradientOp : public AsyncOpKernel {
         ctx, lib->Instantiate(kGradientOp, AttrSlice(def()), &handle), done);
 
     FunctionLibraryRuntime::Options opts;
+    opts.step_id = ctx->step_id();
     opts.rendezvous = ctx->rendezvous();
     opts.cancellation_manager = ctx->cancellation_manager();
     opts.runner = ctx->runner();
     opts.stats_collector = ctx->stats_collector();
     opts.step_container = ctx->step_container();
-    opts.collective_executor = ctx->collective_executor();
     std::vector<Tensor> args;
     args.reserve(ctx->num_inputs());
     for (int i = 0; i < ctx->num_inputs(); ++i) {
       args.push_back(ctx->input(i));
     }
     std::vector<Tensor>* rets = new std::vector<Tensor>;
-    profiler::TraceMe trace_me(
-        [&] {
-          return absl::StrCat(
-              "SymbolicGradientOp #parent_step_id=", ctx->step_id(),
-              ",function_step_id=", opts.step_id, "#");
-        },
-        /*level=*/2);
-    lib->Run(opts, handle, args, rets, [ctx, done, rets](const Status& status) {
-      if (!status.ok()) {
-        ctx->SetStatus(status);
-      } else if (rets->size() != ctx->num_outputs()) {
-        ctx->SetStatus(errors::InvalidArgument(
-            "SymGrad expects to return ", ctx->num_outputs(),
-            " tensor(s), but get ", rets->size(), " tensor(s) instead."));
-      } else {
-        for (size_t i = 0; i < rets->size(); ++i) {
-          ctx->set_output(i, (*rets)[i]);
-        }
-      }
-      delete rets;
-      done();
-    });
+    lib->Run(
+        opts, handle, args, rets, [ctx, done, rets](const Status& status) {
+          if (!status.ok()) {
+            ctx->SetStatus(status);
+          } else if (rets->size() != ctx->num_outputs()) {
+            ctx->SetStatus(errors::InvalidArgument(
+                "SymGrad expects to return ", ctx->num_outputs(),
+                " tensor(s), but get ", rets->size(), " tensor(s) instead."));
+          } else {
+            for (size_t i = 0; i < rets->size(); ++i) {
+              ctx->set_output(i, (*rets)[i]);
+            }
+          }
+          delete rets;
+          done();
+        });
   }
 
  private:
@@ -300,118 +281,68 @@ REGISTER_KERNEL_BUILDER(Name(kGradientOp).Device(DEVICE_SYCL),
 
 #endif  // TENSORFLOW_USE_SYCL
 
-RemoteCallOp::RemoteCallOp(OpKernelConstruction* ctx) : AsyncOpKernel(ctx) {
-  OP_REQUIRES_OK(ctx,
-                 ctx->GetAttr(FunctionLibraryDefinition::kFuncAttr, &func_));
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("Tin", &input_dtypes_));
-  OP_REQUIRES_OK(ctx, ctx->GetAttr("Tout", &output_dtypes_));
-}
+class RemoteCallOp : public AsyncOpKernel {
+ public:
+  explicit RemoteCallOp(OpKernelConstruction* ctx) : AsyncOpKernel(ctx) {
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("f", &func_));
+  }
 
-void RemoteCallOp::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
-  FunctionLibraryRuntime* lib = ctx->function_library();
-  OP_REQUIRES_ASYNC(ctx, lib != nullptr,
-                    errors::Internal("No function library is provided."), done);
+  ~RemoteCallOp() override {}
 
-  const string& source_device = lib->device()->name();
-  const Tensor* target;
-  OP_REQUIRES_OK_ASYNC(ctx, ctx->input("target", &target), done);
-  string target_device;
-  OP_REQUIRES_OK_ASYNC(
-      ctx,
-      DeviceNameUtils::CanonicalizeDeviceName(target->scalar<tstring>()(),
-                                              source_device, &target_device),
-      done);
+  void ComputeAsync(OpKernelContext* ctx, DoneCallback done) override {
+    const Tensor* target;
+    OP_REQUIRES_OK_ASYNC(ctx, ctx->input("target", &target), done);
+    AttrValueMap attr_values = func_.attr();
+    AttrValue v;
+    const string& target_device =
+        DeviceNameUtils::CanonicalizeDeviceName(target->scalar<string>()());
+    v.set_s(target_device);
+    AddAttr("_target", v, &attr_values);
 
-  AttrValueMap attr_values = func_.attr();
-  FunctionLibraryRuntime::InstantiateOptions instantiate_opts;
-  instantiate_opts.target = target_device;
+    FunctionLibraryRuntime* lib = ctx->function_library();
+    OP_REQUIRES_ASYNC(ctx, lib != nullptr,
+                      errors::Internal("No function library is provided."),
+                      done);
+    FunctionLibraryRuntime::Handle handle;
+    OP_REQUIRES_OK_ASYNC(
+        ctx, lib->Instantiate(func_.name(), AttrSlice(&attr_values), &handle),
+        done);
 
-  FunctionTarget function_target = {target_device, lib};
+    OpInputList arguments;
+    OP_REQUIRES_OK_ASYNC(ctx, ctx->input_list("args", &arguments), done);
 
-  FunctionLibraryRuntime::Handle handle;
-  {
-    mutex_lock l(mu_);
-    auto cached_entry = handle_cache_.find(function_target);
-    if (cached_entry != handle_cache_.end()) {
-      handle = cached_entry->second;
-    } else {
-      VLOG(1) << "Instantiating " << func_.name() << " on " << target_device;
-      profiler::TraceMe activity(
-          [&] {
-            return strings::StrCat("RemoteCall: Instantiate: ", func_.name(),
-                                   " on ", target_device);
-          },
-          profiler::TraceMeLevel::kInfo);
-      OP_REQUIRES_OK_ASYNC(
-          ctx,
-          lib->Instantiate(func_.name(), AttrSlice(&attr_values),
-                           instantiate_opts, &handle),
-          done);
-      auto insert_result = handle_cache_.insert({function_target, handle});
-      CHECK(insert_result.second) << "Insert unsuccessful.";
-      VLOG(1) << "Instantiated " << func_.name() << " on " << target_device
-              << ", resulting in handle: " << handle << " flr: " << lib;
+    FunctionLibraryRuntime::Options opts;
+    opts.step_id = ctx->step_id();
+    opts.runner = ctx->runner();
+    opts.source_device = lib->device()->name();
+    if (opts.source_device != target_device) {
+      opts.remote_execution = true;
     }
+    opts.create_rendezvous = true;
+    std::vector<Tensor> args;
+    args.reserve(arguments.size());
+    for (const Tensor& argument : arguments) {
+      args.push_back(argument);
+    }
+    auto* rets = new std::vector<Tensor>;
+    lib->Run(opts, handle, args, rets, [rets, done, ctx](const Status& status) {
+      if (!status.ok()) {
+        ctx->SetStatus(status);
+      } else {
+        for (size_t i = 0; i < rets->size(); ++i) {
+          ctx->set_output(i, (*rets)[i]);
+        }
+      }
+      delete rets;
+      done();
+    });
   }
 
-  OpInputList arguments;
-  OP_REQUIRES_OK_ASYNC(ctx, ctx->input_list("args", &arguments), done);
-
-  FunctionLibraryRuntime::Options opts;
-  opts.runner = ctx->runner();
-  opts.source_device = source_device;
-  if (opts.source_device != target_device) {
-    opts.remote_execution = true;
-  }
-  opts.create_rendezvous = true;
-  std::vector<Tensor> args;
-  args.reserve(arguments.size());
-  for (const Tensor& argument : arguments) {
-    args.push_back(argument);
-  }
-  for (const auto& dtype : input_dtypes_) {
-    AllocatorAttributes arg_alloc_attrs;
-    if (DataTypeAlwaysOnHost(dtype)) {
-      arg_alloc_attrs.set_on_host(true);
-    }
-    opts.args_alloc_attrs.push_back(arg_alloc_attrs);
-  }
-  for (const auto& dtype : output_dtypes_) {
-    AllocatorAttributes ret_alloc_attrs;
-    if (DataTypeAlwaysOnHost(dtype)) {
-      ret_alloc_attrs.set_on_host(true);
-    }
-    opts.rets_alloc_attrs.push_back(ret_alloc_attrs);
-  }
-  auto* rets = new std::vector<Tensor>;
-  auto* activity = new profiler::TraceMe(
-      [&] {
-        return strings::StrCat("RemoteCall: Run: ", func_.name(), " on ",
-                               target_device);
-      },
-      profiler::TraceMeLevel::kInfo);
-  VLOG(1) << "Running " << func_.name() << " on " << target_device
-          << " with handle: " << handle;
-  profiler::TraceMe trace_me(
-      [&] {
-        return absl::StrCat("RemoteCallOp #parent_step_id=", ctx->step_id(),
-                            ",function_step_id=", opts.step_id, "#");
-      },
-      /*level=*/2);
-  lib->Run(opts, handle, args, rets,
-           [rets, activity, done, ctx](const Status& status) {
-             if (!status.ok()) {
-               ctx->SetStatus(status);
-             } else {
-               for (size_t i = 0; i < rets->size(); ++i) {
-                 ctx->set_output(i, (*rets)[i]);
-               }
-             }
-             delete rets;
-             delete activity;
-             done();
-           });
-}
+ private:
+  string target_;
+  NameAttrList func_;
+  TF_DISALLOW_COPY_AND_ASSIGN(RemoteCallOp);
+};
 
 REGISTER_KERNEL_BUILDER(
     Name("RemoteCall").Device(DEVICE_CPU).HostMemory("target"), RemoteCallOp);

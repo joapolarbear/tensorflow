@@ -38,6 +38,7 @@ namespace {
 
 class SparseToDenseTest : public OpsTestBase {
  protected:
+
   void MakeOp(int dim, DataType index_type, DataType value_type) {
     TF_ASSERT_OK(NodeDefBuilder("sparsetodense", "SparseToDense")
                      .Input(FakeInput(index_type))

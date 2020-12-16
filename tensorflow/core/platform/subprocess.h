@@ -13,11 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_PLATFORM_SUBPROCESS_H_
-#define TENSORFLOW_CORE_PLATFORM_SUBPROCESS_H_
-
-#include <memory>
-#include <vector>
+#ifndef TENSORFLOW_PLATFORM_SUBPROCESS_H_
+#define TENSORFLOW_PLATFORM_SUBPROCESS_H_
 
 namespace tensorflow {
 
@@ -46,12 +43,6 @@ enum ChannelAction {
 // Supports spawning and killing child processes.
 class SubProcess;
 
-// Returns an object that represents a child process that will be
-// launched with the given command-line arguments `argv`. The process
-// must be explicitly started by calling the Start() method on the
-// returned object.
-std::unique_ptr<SubProcess> CreateSubProcess(const std::vector<string>& argv);
-
 }  // namespace tensorflow
 
 #include "tensorflow/core/platform/platform.h"
@@ -67,4 +58,4 @@ std::unique_ptr<SubProcess> CreateSubProcess(const std::vector<string>& argv);
 #error Define the appropriate PLATFORM_<foo> macro for this platform
 #endif
 
-#endif  // TENSORFLOW_CORE_PLATFORM_SUBPROCESS_H_
+#endif  // TENSORFLOW_PLATFORM_SUBPROCESS_H_

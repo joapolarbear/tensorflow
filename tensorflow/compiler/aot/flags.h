@@ -34,8 +34,7 @@ struct MainFlags {
   string target_features;
   string entry_point;
   string cpp_class;
-  string out_function_object;
-  string out_metadata_object;
+  string out_object;
   string out_header;
   string out_session_module;
 

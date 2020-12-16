@@ -48,7 +48,8 @@ limitations under the License.
 #include <memory>
 #include "tensorflow/stream_executor/platform/port.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 class Stream;
 template <typename ElemT>
@@ -166,15 +167,6 @@ class FftSupport {
       bool in_place_fft, int batch_count,
       ScratchAllocator *scratch_allocator) = 0;
 
-  // Updates the plan's work area with space allocated by a new scratch
-  // allocator. This facilitates plan reuse with scratch allocators.
-  //
-  // This requires that the plan was originally created using a scratch
-  // allocator, as otherwise scratch space will have been allocated internally
-  // by cuFFT.
-  virtual void UpdatePlanWithScratchAllocator(
-      Stream *stream, Plan *plan, ScratchAllocator *scratch_allocator) = 0;
-
   // Computes complex-to-complex FFT in the transform direction as specified
   // by direction parameter.
   virtual bool DoFft(Stream *stream, Plan *plan,
@@ -209,7 +201,7 @@ class FftSupport {
 
 // Macro used to quickly declare overrides for abstract virtuals in the
 // fft::FftSupport base class. Assumes that it's emitted somewhere inside the
-// ::stream_executor namespace.
+// ::perftools::gputools namespace.
 #define TENSORFLOW_STREAM_EXECUTOR_GPU_FFT_SUPPORT_OVERRIDES                   \
   std::unique_ptr<fft::Plan> Create1dPlan(Stream *stream, uint64 num_x,        \
                                           fft::Type type, bool in_place_fft)   \
@@ -241,9 +233,6 @@ class FftSupport {
       uint64 output_stride, uint64 output_distance, fft::Type type,            \
       bool in_place_fft, int batch_count, ScratchAllocator *scratch_allocator) \
       override;                                                                \
-  void UpdatePlanWithScratchAllocator(Stream *stream, fft::Plan *plan,         \
-                                      ScratchAllocator *scratch_allocator)     \
-      override;                                                                \
   bool DoFft(Stream *stream, fft::Plan *plan,                                  \
              const DeviceMemory<std::complex<float>> &input,                   \
              DeviceMemory<std::complex<float>> *output) override;              \
@@ -264,6 +253,7 @@ class FftSupport {
              DeviceMemory<double> *output) override;
 
 }  // namespace fft
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_FFT_H_

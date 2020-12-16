@@ -17,6 +17,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import types
 
 import numpy as np
@@ -28,12 +29,10 @@ from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import functional_ops
-from tensorflow.python.ops import map_fn as map_fn_lib
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import numerics
 from tensorflow.python.ops import random_ops
 from tensorflow.python.training import input  # pylint: disable=redefined-builtin
-from tensorflow.python.util.compat import collections_abc
 
 
 @tc.returns(core.LabeledTensor)
@@ -52,7 +51,7 @@ def _gather_1d_on_axis(labeled_tensor, indexer, axis, name=None):
 @tc.returns(core.LabeledTensor)
 @tc.accepts(core.LabeledTensorLike,
             tc.Mapping(string_types,
-                       tc.Union(slice, collections_abc.Hashable, list)),
+                       tc.Union(slice, collections.Hashable, list)),
             tc.Optional(string_types))
 def select(labeled_tensor, selection, name=None):
   """Slice out a subset of the tensor.
@@ -111,8 +110,8 @@ def select(labeled_tensor, selection, name=None):
         slices[axis_name] = slice(start, stop)
 
       # Needs to be after checking for slices, since slice objects claim to be
-      # instances of collections_abc.Hashable but hash() on them fails.
-      elif isinstance(value, collections_abc.Hashable):
+      # instances of collections.Hashable but hash() on them fails.
+      elif isinstance(value, collections.Hashable):
         slices[axis_name] = axis.index(value)
 
       elif isinstance(value, list):
@@ -400,7 +399,7 @@ def rename_axis(labeled_tensor, existing_name, new_name, name=None):
 
 
 @tc.returns(tc.List(core.LabeledTensor))
-@tc.accepts(string_types, collections_abc.Callable, int, bool,
+@tc.accepts(string_types, collections.Callable, int, bool,
             tc.Collection(core.LabeledTensorLike), bool,
             tc.Optional(string_types))
 def _batch_helper(default_name,
@@ -606,7 +605,7 @@ def random_crop(labeled_tensor, shape_map, seed=None, name=None):
 
 # TODO(shoyer): Allow the user to select the axis over which to map.
 @tc.returns(core.LabeledTensor)
-@tc.accepts(collections_abc.Callable, core.LabeledTensorLike,
+@tc.accepts(collections.Callable, core.LabeledTensorLike,
             tc.Optional(string_types))
 def map_fn(fn, labeled_tensor, name=None):
   """Map on the list of tensors unpacked from labeled_tensor.
@@ -630,7 +629,7 @@ def map_fn(fn, labeled_tensor, name=None):
 
     # TODO(ericmc): Fix this upstream.
     if labeled_tensor.dtype == dtypes.string:
-      # We must construct the full graph here, because map_fn_lib.map_fn
+      # We must construct the full graph here, because functional_ops.map_fn
       # doesn't work for string-valued tensors.
       # Constructing the full graph may be slow.
       map_lts = [fn(t) for t in unpack_lts]
@@ -653,15 +652,14 @@ def map_fn(fn, labeled_tensor, name=None):
         tensor_lt = core.LabeledTensor(tensor, original_axes)
         return fn(tensor_lt).tensor
 
-      map_op = map_fn_lib.map_fn(
-          tf_fn, labeled_tensor.tensor, dtype=first_map_lt.dtype)
+      map_op = functional_ops.map_fn(tf_fn, labeled_tensor.tensor)
       map_lt = core.LabeledTensor(map_op, final_axes)
 
       return core.identity(map_lt, name=scope)
 
 
 @tc.returns(core.LabeledTensor)
-@tc.accepts(collections_abc.Callable, core.LabeledTensorLike,
+@tc.accepts(collections.Callable, core.LabeledTensorLike,
             core.LabeledTensorLike, tc.Optional(string_types))
 def foldl(fn, labeled_tensor, initial_value, name=None):
   """Left fold on the list of tensors unpacked from labeled_tensor.
@@ -754,7 +752,7 @@ def squeeze(labeled_tensor, axis_names=None, name=None):
 
 # pylint: disable=invalid-name
 ReduceAxis = tc.Union(string_types,
-                      tc.Tuple(string_types, collections_abc.Hashable))
+                      tc.Tuple(string_types, collections.Hashable))
 ReduceAxes = tc.Optional(tc.Union(ReduceAxis, tc.Collection(ReduceAxis)))
 # pylint: enable=invalid-name
 
@@ -876,7 +874,7 @@ def matmul(a, b, name=None):
 
 
 @tc.returns(types.FunctionType)
-@tc.accepts(string_types, collections_abc.Callable)
+@tc.accepts(string_types, collections.Callable)
 def define_reduce_op(op_name, reduce_fn):
   """Define a reduction op for labeled tensors.
 
@@ -953,7 +951,7 @@ def define_reduce_op(op_name, reduce_fn):
           intermediate_axes.append(axis)
 
       reduce_op = reduce_fn(
-          labeled_tensor.tensor, reduction_dimensions, keepdims=True)
+          labeled_tensor.tensor, reduction_dimensions, keep_dims=True)
       reduce_lt = core.LabeledTensor(reduce_op, intermediate_axes)
 
       return squeeze(reduce_lt, axes_to_squeeze, name=scope)
@@ -1244,7 +1242,7 @@ def boolean_mask(labeled_tensor, mask, name=None):
                        'are not equal:\n%r\n%r' % (lt_axis, mask_axis))
     op = array_ops.boolean_mask(labeled_tensor.tensor, mask.tensor, name=scope)
     # TODO(shoyer): attempt to infer labels for the masked values, by calling
-    # tf.get_static_value on the mask?
+    # tf.contrib.util.constant_value on the mask?
     axes = [lt_axis.name] + list(labeled_tensor.axes.values())[1:]
     return core.LabeledTensor(op, axes)
 

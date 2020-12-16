@@ -28,9 +28,10 @@
   ** Please don't remove this file - it is supporting some 3rd party plugins **
 """
 
+licenses(["notice"])
+
 package(
     default_visibility = ["//visibility:public"],
-    licenses = ["notice"],
 )
 
 cc_library(
@@ -40,11 +41,16 @@ cc_library(
     ],
 )
 
-# This target is added purely for the purpose of ensuring that `:xla_device` is
-# always publicly visible to external XLA backend/plugin developers.
-cc_library(
-    name = "plugin_device",
-    deps = [
-        "//tensorflow/compiler/jit:xla_device",
-    ],
+#-----------------------------------------------------------------------------
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

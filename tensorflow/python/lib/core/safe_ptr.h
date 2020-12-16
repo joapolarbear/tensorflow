@@ -13,13 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_
-#define TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_
+#ifndef THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_
+#define THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_
 
 #include <memory>
 
 #include <Python.h>
-
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/c/eager/c_api.h"
 
@@ -67,4 +66,4 @@ Safe_TF_StatusPtr make_safe(TF_Status* status);
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_
+#endif  // THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_SAFE_PTR_H_

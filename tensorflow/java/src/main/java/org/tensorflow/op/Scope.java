@@ -15,11 +15,7 @@ limitations under the License.
 
 package org.tensorflow.op;
 
-import org.tensorflow.ExecutionEnvironment;
-import org.tensorflow.Operand;
-import org.tensorflow.OperationBuilder;
-
-import java.util.ArrayList;
+import org.tensorflow.Graph;
 
 /**
  * Manages groups of related properties when creating Tensorflow Operations, such as a common name
@@ -82,15 +78,15 @@ public final class Scope {
   /**
    * Create a new top-level scope.
    *
-   * @param env The execution environment used by the scope.
+   * @param graph The graph instance to be managed by the scope.
    */
-  public Scope(ExecutionEnvironment env) {
-    this(env, new NameScope(), new ArrayList<Operand<?>>());
+  public Scope(Graph graph) {
+    this(graph, new NameScope());
   }
 
-  /** Returns the execution environment used by this scope. */
-  public ExecutionEnvironment env() {
-    return env;
+  /** Returns the graph managed by this scope. */
+  public Graph graph() {
+    return graph;
   }
 
   /**
@@ -107,7 +103,7 @@ public final class Scope {
    * @throws IllegalArgumentException if the name is invalid
    */
   public Scope withSubScope(String childScopeName) {
-    return new Scope(env, nameScope.withSubScope(childScopeName), controlDependencies);
+    return new Scope(graph, nameScope.withSubScope(childScopeName));
   }
 
   /**
@@ -123,7 +119,7 @@ public final class Scope {
    * @throws IllegalArgumentException if the name is invalid
    */
   public Scope withName(String opName) {
-    return new Scope(env, nameScope.withName(opName), controlDependencies);
+    return new Scope(graph, nameScope.withName(opName));
   }
 
   /**
@@ -135,12 +131,21 @@ public final class Scope {
    * instance. Typical operator building code might look like
    *
    * <pre>{@code
-   * scope.env().opBuilder("Const", scope.makeOpName("Const"))...
+   * scope.graph().opBuilder("Const", scope.makeOpName("Const"))...
    * }</pre>
    *
-   * <p><b>Note:</b> if you provide a composite operator building class (i.e, a class that creates a
-   * set of related operations by calling other operator building code), the provided name will act
-   * as a subscope to all underlying operators.
+   * <p><b>Note:</b> if you provide a composite operator building class (i.e, a class that adds a
+   * set of related operations to the graph by calling other operator building code) you should also
+   * create a {@link #withSubScope(String)} scope for the underlying operators to group them under a
+   * meaningful name.
+   *
+   * <pre>{@code
+   * public static Stddev create(Scope scope, ...) {
+   *   // group sub-operations under a common name
+   *   Scope group = scope.withSubScope("stddev");
+   *   ... Sqrt.create(group, Mean.create(group, ...))
+   * }
+   * }</pre>
    *
    * @param defaultName name for the underlying operator.
    * @return unique name for the operator.
@@ -150,39 +155,11 @@ public final class Scope {
     return nameScope.makeOpName(defaultName);
   }
 
-  private Scope(
-      ExecutionEnvironment env, NameScope nameScope, Iterable<Operand<?>> controlDependencies) {
-    this.env = env;
+  private Scope(Graph graph, NameScope nameScope) {
+    this.graph = graph;
     this.nameScope = nameScope;
-    this.controlDependencies = controlDependencies;
   }
 
-  /**
-   * Returns a new scope where added operations will have the provided control dependencies.
-   *
-   * <p>Ops created with this scope will have a control edge from each of the provided controls. All
-   * other properties are inherited from the current scope.
-   *
-   * @param controls control dependencies for ops created with the returned scope
-   * @return a new scope with the provided control dependencies
-   */
-  public Scope withControlDependencies(Iterable<Operand<?>> controls) {
-    return new Scope(env, nameScope, controls);
-  }
-
-  /**
-   * Adds each Operand in controlDependencies as a control input to the provided builder.
-   *
-   * @param builder OperationBuilder to add control inputs to
-   */
-  public OperationBuilder applyControlDependencies(OperationBuilder builder) {
-    for (Operand<?> control : controlDependencies) {
-      builder = builder.addControlInput(control.asOutput().op());
-    }
-    return builder;
-  }
-
-  private final ExecutionEnvironment env;
-  private final Iterable<Operand<?>> controlDependencies;
+  private final Graph graph;
   private final NameScope nameScope;
 }

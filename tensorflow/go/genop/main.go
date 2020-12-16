@@ -27,17 +27,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/tensorflow/tensorflow/tensorflow/go/genop/internal"
 )
 
 func main() {
 	var (
-		filename   = flag.String("outfile", "", "File to write generated source code to.")
-		header     = flag.String("header", "", "Path to a file whose contents will be copied into the generated file. Can be empty")
-		apiDefDirs = flag.String("api_def_dirs", "", "Comma-separated directories containing api_def_*.pbtxt files.")
-		buf        bytes.Buffer
+		filename = flag.String("outfile", "", "File to write generated source code to.")
+		header   = flag.String("header", "", "Path to a file whose contents will be copied into the generated file. Can be empty")
+		buf      bytes.Buffer
 	)
 	flag.Parse()
 	if *filename == "" {
@@ -53,13 +51,7 @@ func main() {
 	}
 	os.MkdirAll(filepath.Dir(*filename), 0755)
 
-	apiDefDirsList := []string{}
-	if len(*apiDefDirs) > 0 {
-		apiDefDirsList = strings.Split(*apiDefDirs, ",")
-	}
-
-	if err := internal.GenerateFunctionsForRegisteredOps(
-		&buf, apiDefDirsList); err != nil {
+	if err := internal.GenerateFunctionsForRegisteredOps(&buf); err != nil {
 		log.Fatal(err)
 	}
 	formatted, err := format.Source(buf.Bytes())

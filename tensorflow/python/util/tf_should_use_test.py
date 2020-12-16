@@ -24,105 +24,98 @@ import gc
 import sys
 
 from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 from tensorflow.python.platform import tf_logging
 from tensorflow.python.util import tf_should_use
 
 
 @contextlib.contextmanager
-def reroute_error():
+def reroute_error(captured):
   """Temporarily reroute errors written to tf_logging.error into `captured`."""
-  with test.mock.patch.object(tf_should_use.tf_logging, 'error') as error:
-    with test.mock.patch.object(tf_should_use.tf_logging, 'fatal') as fatal:
-      yield error, fatal
+  del captured[:]
+  true_logger = tf_logging.error
+  def capture_errors(*args, **unused_kwargs):
+    captured.extend(args)
+  tf_logging.error = capture_errors
+  try:
+    yield
+  finally:
+    tf_logging.error = true_logger
 
 
 class TfShouldUseTest(test.TestCase):
 
-  @test_util.run_deprecated_v1
   def testAddShouldUseWarningWhenNotUsed(self):
+    self.skipTest('b/65412899')
     c = constant_op.constant(0, name='blah0')
-    def in_this_function():
-      h = tf_should_use._add_should_use_warning(c)
-      del h
-    with reroute_error() as (error, _):
+    captured = []
+    with reroute_error(captured):
+      def in_this_function():
+        h = tf_should_use._add_should_use_warning(c)
+        del h
       in_this_function()
-    msg = '\n'.join(error.call_args[0])
-    self.assertIn('Object was never used', msg)
-    self.assertIn('blah0:0', msg)
-    self.assertIn('in_this_function', msg)
-    self.assertFalse(gc.garbage)
-
-  @test_util.run_deprecated_v1
-  def testAddShouldUseFatalWhenNotUsed(self):
-    c = constant_op.constant(0, name='blah0')
-    def in_this_function():
-      h = tf_should_use._add_should_use_warning(c, fatal_error=True)
-      del h
-    with reroute_error() as (_, fatal):
-      in_this_function()
-    msg = '\n'.join(fatal.call_args[0])
-    self.assertIn('Object was never used', msg)
-    self.assertIn('blah0:0', msg)
-    self.assertIn('in_this_function', msg)
+    self.assertIn('Object was never used', '\n'.join(captured))
+    self.assertIn('blah0:0', '\n'.join(captured))
+    self.assertIn('in_this_function', '\n'.join(captured))
+    gc.collect()
     self.assertFalse(gc.garbage)
 
   def _testAddShouldUseWarningWhenUsed(self, fn, name):
     c = constant_op.constant(0, name=name)
-    with reroute_error() as (error, fatal):
+    captured = []
+    with reroute_error(captured):
       h = tf_should_use._add_should_use_warning(c)
       fn(h)
       del h
-    error.assert_not_called()
-    fatal.assert_not_called()
+    self.assertNotIn('Object was never used', '\n'.join(captured))
+    self.assertNotIn('%s:0' % name, '\n'.join(captured))
 
-  @test_util.run_deprecated_v1
   def testAddShouldUseWarningWhenUsedWithAdd(self):
+    self.skipTest('b/65412899')
     def add(h):
       _ = h + 1
     self._testAddShouldUseWarningWhenUsed(add, name='blah_add')
     gc.collect()
     self.assertFalse(gc.garbage)
 
-  @test_util.run_deprecated_v1
   def testAddShouldUseWarningWhenUsedWithGetName(self):
+    self.skipTest('b/65412899')
     def get_name(h):
       _ = h.name
     self._testAddShouldUseWarningWhenUsed(get_name, name='blah_get_name')
     gc.collect()
     self.assertFalse(gc.garbage)
 
-  @test_util.run_deprecated_v1
   def testShouldUseResult(self):
+    self.skipTest('b/65412899')
     @tf_should_use.should_use_result
     def return_const(value):
       return constant_op.constant(value, name='blah2')
-    with reroute_error() as (error, _):
+    captured = []
+    with reroute_error(captured):
       return_const(0.0)
-    msg = '\n'.join(error.call_args[0])
-    self.assertIn('Object was never used', msg)
-    self.assertIn('blah2:0', msg)
-    self.assertIn('return_const', msg)
+    self.assertIn('Object was never used', '\n'.join(captured))
+    self.assertIn('blah2:0', '\n'.join(captured))
+    self.assertIn('return_const', '\n'.join(captured))
     gc.collect()
     self.assertFalse(gc.garbage)
 
-  @test_util.run_deprecated_v1
   def testShouldUseResultWhenNotReallyUsed(self):
+    self.skipTest('b/65412899')
     @tf_should_use.should_use_result
     def return_const(value):
       return constant_op.constant(value, name='blah3')
-    with reroute_error() as (error, _):
-      with self.cached_session():
+    captured = []
+    with reroute_error(captured):
+      with self.test_session():
         return_const(0.0)
         # Creating another op and executing it does not mark the
         # unused op as being "used".
         v = constant_op.constant(1.0, name='meh')
-        self.evaluate(v)
-    msg = '\n'.join(error.call_args[0])
-    self.assertIn('Object was never used', msg)
-    self.assertIn('blah3:0', msg)
-    self.assertIn('return_const', msg)
+        v.eval()
+    self.assertIn('Object was never used', '\n'.join(captured))
+    self.assertIn('blah3:0', '\n'.join(captured))
+    self.assertIn('return_const', '\n'.join(captured))
     gc.collect()
     self.assertFalse(gc.garbage)
 
@@ -131,8 +124,7 @@ class TfShouldUseTest(test.TestCase):
     @tf_should_use.should_use_result
     def return_const(value):
       return constant_op.constant(value, name='blah3')
-
-    with self.cached_session():
+    with self.test_session():
       return_const(0.0).mark_used()
 
 if __name__ == '__main__':

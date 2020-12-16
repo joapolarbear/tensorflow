@@ -14,7 +14,10 @@ Open a Chrome browser, enter URL chrome://tracing and load the timeline file.
 ******************************************************
 ```
 
+<left>
 ![Timeline](graph_timeline.png)
+</left>
+
 
 ```python
 # You can also visualize the memory information through other methods.

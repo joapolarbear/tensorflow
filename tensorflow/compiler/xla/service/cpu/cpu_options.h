@@ -24,11 +24,10 @@ namespace xla {
 namespace cpu {
 namespace options {
 
+bool CpuParallelBackendRequested(const HloModuleConfig& config);
 bool OptimizeForSizeRequested(const HloModuleConfig& config);
 bool VectorizedReduceDisabled(const HloModuleConfig& config);
-bool ForceEnableExperimentalLlvmIrGemm(const HloModuleConfig& config);
-absl::optional<int64> LlvmIrGemvTilingFactor(const HloModuleConfig& config);
-absl::optional<std::tuple<int64, int64, int64>> LlvmIrGemmTileSize(
+tensorflow::gtl::optional<int64> LlvmIrGemvTilingFactor(
     const HloModuleConfig& config);
 
 }  // namespace options

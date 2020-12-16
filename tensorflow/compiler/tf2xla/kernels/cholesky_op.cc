@@ -13,10 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "tensorflow/compiler/tf2xla/lib/cholesky.h"
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
-#include "tensorflow/compiler/xla/client/lib/matrix.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
 
 namespace tensorflow {
 namespace {
@@ -25,13 +24,16 @@ class CholeskyOp : public XlaOpKernel {
  public:
   explicit CholeskyOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {}
   void Compile(XlaOpKernelContext* ctx) override {
-    ctx->SetOutput(0,
-                   xla::Triangle(xla::Cholesky(ctx->Input(0), /*lower=*/true),
-                                 /*lower=*/true));
+    auto result = Cholesky(ctx->builder(), ctx->Input(0));
+    if (!result.ok()) {
+      ctx->SetStatus(result.status());
+      return;
+    }
+    ctx->SetOutput(0, result.ValueOrDie());
   }
 };
 
-REGISTER_XLA_OP(Name("Cholesky").TypeConstraint("T", kFloatTypes), CholeskyOp);
+REGISTER_XLA_OP(Name("Cholesky"), CholeskyOp);
 
 }  // namespace
 }  // namespace tensorflow

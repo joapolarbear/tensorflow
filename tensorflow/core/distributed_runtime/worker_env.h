@@ -25,7 +25,6 @@ namespace thread {
 class ThreadPool;
 }  // namespace thread
 
-class CollectiveExecutorMgrInterface;
 class Device;
 class DeviceMgr;
 class Env;
@@ -57,10 +56,6 @@ struct WorkerEnv {
 
   // A set of rendezvous keyed by step ids.
   RendezvousMgrInterface* rendezvous_mgr = nullptr;
-
-  // Generates per-step CollectiveExecutors and has access to utilities
-  // supporting collective operations.
-  CollectiveExecutorMgrInterface* collective_executor_mgr = nullptr;
 
   // A pool of threads for scheduling compute work.
   thread::ThreadPool* compute_pool = nullptr;

@@ -39,10 +39,10 @@ Status CheckInvalidLabelIndex(const Tensor& labels, int64 max_index) {
   if (*min_max_dim_value.first < 0 || *min_max_dim_value.second >= max_index) {
     bad_index = (*min_max_dim_value.first < 0) ? *min_max_dim_value.first
                                                : *min_max_dim_value.second;
-    return errors::InvalidArgument(
-        "Received a label value of ", bad_index,
-        " which is outside the valid range of [0, ", max_index,
-        ").  Label values: ", labels.SummarizeValue(labels.NumElements()));
+    return errors::InvalidArgument("Received a label value of ", bad_index,
+                                   " which is outside the valid range of [0, ",
+                                   max_index, ").  Label values: ",
+                                   labels.SummarizeValue(labels.NumElements()));
   }
   return Status::OK();
 }
@@ -90,8 +90,9 @@ class SparseSoftmaxXentWithLogitsOp : public OpKernel {
             context, CheckInvalidLabelIndex<Index>(labels, logits.dim_size(1)));
       }
       functor::SparseXentFunctor<Device, T, Index> functor;
-      functor(context, logits.matrix<T>(), labels.vec<Index>(),
-              scratch.vec<T>(), loss_out->vec<T>(), back_out->matrix<T>());
+      functor(context->eigen_device<Device>(), logits.matrix<T>(),
+              labels.vec<Index>(), scratch.vec<T>(), loss_out->vec<T>(),
+              back_out->matrix<T>());
     }
   }
 };
@@ -101,11 +102,11 @@ class SparseSoftmaxXentWithLogitsOp : public OpKernel {
 namespace functor {
 template <typename T, typename Index>
 struct SparseXentFunctor<CPUDevice, T, Index> {
-  void operator()(OpKernelContext* ctx, typename TTypes<T>::ConstMatrix logits,
+  void operator()(const CPUDevice& d, typename TTypes<T>::ConstMatrix logits,
                   typename TTypes<Index>::ConstVec labels,
                   typename TTypes<T>::Vec scratch, typename TTypes<T>::Vec loss,
                   typename TTypes<T>::Matrix backprop) {
-    SparseXentEigenImpl<CPUDevice, T, Index>::Compute(ctx, logits, labels,
+    SparseXentEigenImpl<CPUDevice, T, Index>::Compute(d, logits, labels,
                                                       scratch, loss, backprop);
   }
 };
@@ -125,12 +126,12 @@ REGISTER(CPU, double, int64)
 REGISTER(CPU, Eigen::half, int32)
 REGISTER(CPU, Eigen::half, int64)
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 REGISTER(GPU, float, int32)
 REGISTER(GPU, float, int64)
 REGISTER(GPU, Eigen::half, int32)
 REGISTER(GPU, Eigen::half, int64)
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #undef REGISTER
 

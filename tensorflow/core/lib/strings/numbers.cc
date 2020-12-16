@@ -18,18 +18,14 @@ limitations under the License.
 #include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <algorithm>
-#include <cinttypes>
 #include <cmath>
 #include <locale>
 #include <unordered_map>
 
-#include "double-conversion/double-conversion.h"
-#include "tensorflow/core/lib/strings/str_util.h"
+#include "tensorflow/core/lib/strings/stringprintf.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/macros.h"
-#include "tensorflow/core/platform/stringprintf.h"
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
@@ -37,25 +33,18 @@ namespace tensorflow {
 namespace {
 
 template <typename T>
-const std::unordered_map<string, T>* GetSpecialNumsSingleton() {
-  static const std::unordered_map<string, T>* special_nums =
-      CHECK_NOTNULL((new const std::unordered_map<string, T>{
-          {"inf", std::numeric_limits<T>::infinity()},
-          {"+inf", std::numeric_limits<T>::infinity()},
-          {"-inf", -std::numeric_limits<T>::infinity()},
-          {"infinity", std::numeric_limits<T>::infinity()},
-          {"+infinity", std::numeric_limits<T>::infinity()},
-          {"-infinity", -std::numeric_limits<T>::infinity()},
-          {"nan", std::numeric_limits<T>::quiet_NaN()},
-          {"+nan", std::numeric_limits<T>::quiet_NaN()},
-          {"-nan", -std::numeric_limits<T>::quiet_NaN()},
-      }));
-  return special_nums;
-}
-
-template <typename T>
 T locale_independent_strtonum(const char* str, const char** endptr) {
-  auto special_nums = GetSpecialNumsSingleton<T>();
+  static const std::unordered_map<string, T> special_nums = {
+      {"inf", std::numeric_limits<T>::infinity()},
+      {"+inf", std::numeric_limits<T>::infinity()},
+      {"-inf", -std::numeric_limits<T>::infinity()},
+      {"infinity", std::numeric_limits<T>::infinity()},
+      {"+infinity", std::numeric_limits<T>::infinity()},
+      {"-infinity", -std::numeric_limits<T>::infinity()},
+      {"nan", std::numeric_limits<T>::quiet_NaN()},
+      {"+nan", std::numeric_limits<T>::quiet_NaN()},
+      {"-nan", -std::numeric_limits<T>::quiet_NaN()},
+  };
   std::stringstream s(str);
 
   // Check if str is one of the special numbers.
@@ -67,8 +56,8 @@ T locale_independent_strtonum(const char* str, const char** endptr) {
         std::tolower(special_num_str[i], std::locale::classic());
   }
 
-  auto entry = special_nums->find(special_num_str);
-  if (entry != special_nums->end()) {
+  auto entry = special_nums.find(special_num_str);
+  if (entry != special_nums.end()) {
     *endptr = str + (s.eof() ? static_cast<std::iostream::pos_type>(strlen(str))
                              : s.tellg());
     return entry->second;
@@ -113,37 +102,23 @@ T locale_independent_strtonum(const char* str, const char** endptr) {
   return result;
 }
 
-static inline const double_conversion::StringToDoubleConverter&
-StringToFloatConverter() {
-  static const double_conversion::StringToDoubleConverter converter(
-      double_conversion::StringToDoubleConverter::ALLOW_LEADING_SPACES |
-          double_conversion::StringToDoubleConverter::ALLOW_HEX |
-          double_conversion::StringToDoubleConverter::ALLOW_TRAILING_SPACES |
-          double_conversion::StringToDoubleConverter::ALLOW_CASE_INSENSIBILITY,
-      0., 0., "inf", "nan");
-  return converter;
-}
-
 }  // namespace
 
 namespace strings {
 
-size_t FastInt32ToBufferLeft(int32 i, char* buffer) {
+char* FastInt32ToBufferLeft(int32 i, char* buffer) {
   uint32 u = i;
-  size_t length = 0;
   if (i < 0) {
     *buffer++ = '-';
-    ++length;
     // We need to do the negation in modular (i.e., "unsigned")
     // arithmetic; MSVC++ apparently warns for plain "-u", so
     // we write the equivalent expression "0 - u" instead.
     u = 0 - u;
   }
-  length += FastUInt32ToBufferLeft(u, buffer);
-  return length;
+  return FastUInt32ToBufferLeft(u, buffer);
 }
 
-size_t FastUInt32ToBufferLeft(uint32 i, char* buffer) {
+char* FastUInt32ToBufferLeft(uint32 i, char* buffer) {
   char* start = buffer;
   do {
     *buffer++ = ((i % 10) + '0');
@@ -151,22 +126,19 @@ size_t FastUInt32ToBufferLeft(uint32 i, char* buffer) {
   } while (i > 0);
   *buffer = 0;
   std::reverse(start, buffer);
-  return buffer - start;
+  return buffer;
 }
 
-size_t FastInt64ToBufferLeft(int64 i, char* buffer) {
+char* FastInt64ToBufferLeft(int64 i, char* buffer) {
   uint64 u = i;
-  size_t length = 0;
   if (i < 0) {
     *buffer++ = '-';
-    ++length;
     u = 0 - u;
   }
-  length += FastUInt64ToBufferLeft(u, buffer);
-  return length;
+  return FastUInt64ToBufferLeft(u, buffer);
 }
 
-size_t FastUInt64ToBufferLeft(uint64 i, char* buffer) {
+char* FastUInt64ToBufferLeft(uint64 i, char* buffer) {
   char* start = buffer;
   do {
     *buffer++ = ((i % 10) + '0');
@@ -174,18 +146,19 @@ size_t FastUInt64ToBufferLeft(uint64 i, char* buffer) {
   } while (i > 0);
   *buffer = 0;
   std::reverse(start, buffer);
-  return buffer - start;
+  return buffer;
 }
 
 static const double kDoublePrecisionCheckMax = DBL_MAX / 1.000000000000001;
 
-size_t DoubleToBuffer(double value, char* buffer) {
+char* DoubleToBuffer(double value, char* buffer) {
   // DBL_DIG is 15 for IEEE-754 doubles, which are used on almost all
   // platforms these days.  Just in case some system exists where DBL_DIG
   // is significantly larger -- and risks overflowing our buffer -- we have
   // this assert.
   static_assert(DBL_DIG < 20, "DBL_DIG is too big");
 
+  bool full_precision_needed = true;
   if (std::abs(value) <= kDoublePrecisionCheckMax) {
     int snprintf_result =
         snprintf(buffer, kFastToBufferSize, "%.*g", DBL_DIG, value);
@@ -194,20 +167,18 @@ size_t DoubleToBuffer(double value, char* buffer) {
     // larger than the precision we asked for.
     DCHECK(snprintf_result > 0 && snprintf_result < kFastToBufferSize);
 
-    if (locale_independent_strtonum<double>(buffer, nullptr) == value) {
-      // Round-tripping the string to double works; we're done.
-      return snprintf_result;
-    }
-    // else: full precision formatting needed. Fall through.
+    full_precision_needed =
+        locale_independent_strtonum<double>(buffer, nullptr) != value;
   }
 
-  int snprintf_result =
-      snprintf(buffer, kFastToBufferSize, "%.*g", DBL_DIG + 2, value);
+  if (full_precision_needed) {
+    int snprintf_result =
+        snprintf(buffer, kFastToBufferSize, "%.*g", DBL_DIG + 2, value);
 
-  // Should never overflow; see above.
-  DCHECK(snprintf_result > 0 && snprintf_result < kFastToBufferSize);
-
-  return snprintf_result;
+    // Should never overflow; see above.
+    DCHECK(snprintf_result > 0 && snprintf_result < kFastToBufferSize);
+  }
+  return buffer;
 }
 
 namespace {
@@ -225,7 +196,7 @@ bool safe_strto64(StringPiece str, int64* value) {
 
   int64 vlimit = kint64max;
   int sign = 1;
-  if (absl::ConsumePrefix(&str, "-")) {
+  if (str.Consume("-")) {
     sign = -1;
     // Different limit for positive and negative integers.
     vlimit = kint64min;
@@ -287,7 +258,7 @@ bool safe_strto32(StringPiece str, int32* value) {
 
   int64 vmax = kint32max;
   int sign = 1;
-  if (absl::ConsumePrefix(&str, "-")) {
+  if (str.Consume("-")) {
     sign = -1;
     // Different max for positive and negative integers.
     ++vmax;
@@ -332,33 +303,29 @@ bool safe_strtou32(StringPiece str, uint32* value) {
   return true;
 }
 
-bool safe_strtof(StringPiece str, float* value) {
-  int processed_characters_count = -1;
-  auto len = str.size();
-
-  // If string length exceeds buffer size or int max, fail.
-  if (len >= kFastToBufferSize) return false;
-  if (len > std::numeric_limits<int>::max()) return false;
-
-  *value = StringToFloatConverter().StringToFloat(
-      str.data(), static_cast<int>(len), &processed_characters_count);
-  return processed_characters_count > 0;
+bool safe_strtof(const char* str, float* value) {
+  const char* endptr;
+  *value = locale_independent_strtonum<float>(str, &endptr);
+  while (isspace(*endptr)) ++endptr;
+  // Ignore range errors from strtod/strtof.
+  // The values it returns on underflow and
+  // overflow are the right fallback in a
+  // robust setting.
+  return *str != '\0' && *endptr == '\0';
 }
 
-bool safe_strtod(StringPiece str, double* value) {
-  int processed_characters_count = -1;
-  auto len = str.size();
-
-  // If string length exceeds buffer size or int max, fail.
-  if (len >= kFastToBufferSize) return false;
-  if (len > std::numeric_limits<int>::max()) return false;
-
-  *value = StringToFloatConverter().StringToDouble(
-      str.data(), static_cast<int>(len), &processed_characters_count);
-  return processed_characters_count > 0;
+bool safe_strtod(const char* str, double* value) {
+  const char* endptr;
+  *value = locale_independent_strtonum<double>(str, &endptr);
+  while (isspace(*endptr)) ++endptr;
+  // Ignore range errors from strtod/strtof.
+  // The values it returns on underflow and
+  // overflow are the right fallback in a
+  // robust setting.
+  return *str != '\0' && *endptr == '\0';
 }
 
-size_t FloatToBuffer(float value, char* buffer) {
+char* FloatToBuffer(float value, char* buffer) {
   // FLT_DIG is 6 for IEEE-754 floats, which are used on almost all
   // platforms these days.  Just in case some system exists where FLT_DIG
   // is significantly larger -- and risks overflowing our buffer -- we have
@@ -380,7 +347,7 @@ size_t FloatToBuffer(float value, char* buffer) {
     // Should never overflow; see above.
     DCHECK(snprintf_result > 0 && snprintf_result < kFastToBufferSize);
   }
-  return snprintf_result;
+  return buffer;
 }
 
 string FpToString(Fprint fp) {
@@ -391,8 +358,8 @@ string FpToString(Fprint fp) {
 
 bool StringToFp(const string& s, Fprint* fp) {
   char junk;
-  uint64_t result;
-  if (sscanf(s.c_str(), "%" SCNx64 "%c", &result, &junk) == 1) {
+  uint64 result;
+  if (sscanf(s.c_str(), "%llx%c", &result, &junk) == 1) {
     *fp = result;
     return true;
   } else {

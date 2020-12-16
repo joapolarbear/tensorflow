@@ -67,7 +67,7 @@ class CheckpointConvertTest(test.TestCase):
         self._old_ckpt_path, self._new_ckpt_path)
     self.assertTrue(glob.glob(self._new_ckpt_path + "*"))
     self.assertItemsEqual(
-        set(checkpoint_convert.RNN_NAME_REPLACEMENTS.values()).union(["a"]),
+        ["a"] + list(checkpoint_convert.RNN_NAME_REPLACEMENTS.values()),
         new_var_map.keys())
     self.assertEqual(checkpoint_convert.RNN_NAME_REPLACEMENTS, conversion_map)
 

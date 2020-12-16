@@ -16,14 +16,13 @@
 # Description:
 # SavedModel contrib libraries.
 
-load("//tensorflow:tensorflow.bzl", "py_test")
-
-package(
-    default_visibility = ["//tensorflow:__subpackages__"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:__subpackages__"])
+
+load("//tensorflow:tensorflow.bzl", "py_test")
 
 py_library(
     name = "saved_model_py",
@@ -37,7 +36,6 @@ py_library(
     srcs_version = "PY2AND3",
     visibility = ["//visibility:public"],
     deps = [
-        ":keras_saved_model",
         "//tensorflow/core:protos_all_py",
         "//tensorflow/python:framework_ops",
         "//tensorflow/python:lib",
@@ -50,14 +48,15 @@ py_library(
     ],
 )
 
-py_library(
-    name = "reader",
-    srcs = ["python/saved_model/reader.py"],
+py_test(
+    name = "reader_test",
+    size = "small",
+    srcs = ["python/saved_model/reader_test.py"],
     srcs_version = "PY2AND3",
-    tags = ["no_windows"],  # TODO: needs investigation on Windows
-    visibility = ["//visibility:public"],
+    visibility = ["//visibility:private"],
     deps = [
         ":saved_model_py",
+        "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:lib",
         "//tensorflow/python:variables",
@@ -67,25 +66,46 @@ py_library(
 )
 
 py_test(
-    name = "reader_test",
+    name = "signature_def_utils_test",
     size = "small",
-    srcs = ["python/saved_model/reader_test.py"],
-    python_version = "PY2",
+    srcs = ["python/saved_model/signature_def_utils_test.py"],
     srcs_version = "PY2AND3",
-    tags = ["no_windows"],  # TODO: needs investigation on Windows
-    visibility = ["//visibility:private"],
     deps = [
-        ":reader",
+        ":saved_model_py",
+        "//tensorflow/core:protos_all_py",
+        "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
+        "//tensorflow/python:framework_for_generated_wrappers",
+        "//tensorflow/python/saved_model:signature_constants",
+        "//tensorflow/python/saved_model:signature_def_utils",
+        "//tensorflow/python/saved_model:utils",
     ],
 )
 
-py_library(
-    name = "keras_saved_model",
-    srcs = ["python/saved_model/keras_saved_model.py"],
+py_test(
+    name = "utils_test",
+    size = "small",
+    srcs = ["python/saved_model/utils_test.py"],
     srcs_version = "PY2AND3",
-    visibility = ["//visibility:public"],
     deps = [
-        "//tensorflow/python/keras",
+        ":saved_model_py",
+        "//tensorflow/python:client_testlib",
+        "//tensorflow/python:framework_ops",
+        "//tensorflow/python:variables",
+        "//tensorflow/python/saved_model:loader",
+        "//tensorflow/python/saved_model:signature_constants",
+        "//tensorflow/python/saved_model:tag_constants",
     ],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

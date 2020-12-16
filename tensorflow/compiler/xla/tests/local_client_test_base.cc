@@ -18,16 +18,16 @@ limitations under the License.
 
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/map_util.h"
+#include "tensorflow/compiler/xla/ptr_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/status_macros.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
+#include "tensorflow/core/common_runtime/eigen_thread_pool.h"
 #include "tensorflow/core/lib/core/threadpool.h"
-#include "tensorflow/core/platform/byte_order.h"
+#include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 
@@ -35,7 +35,7 @@ namespace xla {
 
 /* static */ TestAllocator* LocalClientTestBase::allocator_;
 
-StatusOr<se::OwningDeviceMemory> TestAllocator::Allocate(
+StatusOr<perftools::gputools::DeviceMemoryBase> TestAllocator::Allocate(
     int device_ordinal, uint64 size, bool retry_on_failure) {
   VLOG(2) << "Allocate(" << device_ordinal << ", " << size << ")";
   {
@@ -43,18 +43,18 @@ StatusOr<se::OwningDeviceMemory> TestAllocator::Allocate(
     allocation_count_++;
     device_allocation_count_[device_ordinal]++;
   }
-  return se::StreamExecutorMemoryAllocator::Allocate(device_ordinal, size,
-                                                     retry_on_failure);
+  return StreamExecutorMemoryAllocator::Allocate(device_ordinal, size);
 }
 
-Status TestAllocator::Deallocate(int device_ordinal, se::DeviceMemoryBase mem) {
+tensorflow::Status TestAllocator::Deallocate(
+    int device_ordinal, perftools::gputools::DeviceMemoryBase* mem) {
   VLOG(2) << "Deallocate(" << device_ordinal << ")";
   {
     tensorflow::mutex_lock lock(count_mutex_);
     deallocation_count_++;
     device_deallocation_count_[device_ordinal]++;
   }
-  return se::StreamExecutorMemoryAllocator::Deallocate(device_ordinal, mem);
+  return StreamExecutorMemoryAllocator::Deallocate(device_ordinal, mem);
 }
 
 int64 TestAllocator::allocation_count() const {
@@ -88,7 +88,7 @@ int64 TestAllocator::deallocation_count(int device_ordinal) const {
 }
 
 /* static */ TestAllocator* LocalClientTestBase::GetOrCreateAllocator(
-    se::Platform* platform) {
+    perftools::gputools::Platform* platform) {
   static tensorflow::mutex mu(tensorflow::LINKER_INITIALIZED);
   tensorflow::mutex_lock lock(mu);
 
@@ -106,35 +106,36 @@ struct LocalClientTestBase::EigenThreadPoolWrapper {
   explicit EigenThreadPoolWrapper()
       : pool(new tensorflow::thread::ThreadPool(
             tensorflow::Env::Default(), "XLAEigenTest", /*num_threads=*/2)),
-        device(new Eigen::ThreadPoolDevice(pool->AsEigenThreadPool(),
-                                           pool->NumThreads())) {}
+        wrapper(new tensorflow::EigenThreadPoolWrapper(pool.get())),
+        device(new Eigen::ThreadPoolDevice(wrapper.get(),
+                                           wrapper->NumThreads())) {}
 
   std::unique_ptr<tensorflow::thread::ThreadPool> pool;
+  std::unique_ptr<tensorflow::EigenThreadPoolWrapper> wrapper;
   std::unique_ptr<Eigen::ThreadPoolDevice> device;
 };
 
-LocalClientTestBase::LocalClientTestBase(se::Platform* platform)
+LocalClientTestBase::LocalClientTestBase(
+    perftools::gputools::Platform* platform)
     : local_client_(
           ClientLibrary::GetOrCreateLocalClient(platform).ValueOrDie()),
       thread_pool_wrapper_(new EigenThreadPoolWrapper()) {
-  // Take the first executor, since it's the default one.
   stream_executor_ = PlatformUtil::GetStreamExecutors(local_client_->platform())
-                         .ValueOrDie()
-                         .front();
+                         .ValueOrDie()[local_client_->default_device_ordinal()];
   transfer_manager_ =
       TransferManager::GetForPlatform(local_client_->platform()).ValueOrDie();
 }
 
 LocalClientTestBase::~LocalClientTestBase() {}
 
-ScopedShapedBuffer LocalClientTestBase::LiteralToShapedBuffer(
+std::unique_ptr<ScopedShapedBuffer> LocalClientTestBase::LiteralToShapedBuffer(
     const Literal& literal) {
   return local_client_
       ->LiteralToShapedBuffer(literal, local_client_->default_device_ordinal())
       .ConsumeValueOrDie();
 }
 
-Literal LocalClientTestBase::ShapedBufferToLiteral(
+std::unique_ptr<Literal> LocalClientTestBase::ShapedBufferToLiteral(
     const ShapedBuffer& shaped_buffer) {
   return local_client_->ShapedBufferToLiteral(shaped_buffer)
       .ConsumeValueOrDie();
@@ -147,38 +148,42 @@ ExecutableBuildOptions LocalClientTestBase::DefaultExecutableBuildOptions()
 
 ExecutableRunOptions LocalClientTestBase::DefaultExecutableRunOptions() const {
   ExecutableRunOptions run_options;
+  run_options.set_inter_op_thread_pool(
+      local_client_->backend().inter_op_thread_pool());
   run_options.set_intra_op_thread_pool(thread_pool_wrapper_->device.get());
   run_options.set_allocator(GetOrCreateAllocator(local_client_->platform()));
   return run_options;
 }
 
-ScopedShapedBuffer LocalClientTestBase::ExecuteLocallyOrDie(
-    const XlaComputation& computation,
-    absl::Span<const ShapedBuffer* const> arguments) {
+std::unique_ptr<ScopedShapedBuffer> LocalClientTestBase::ExecuteLocallyOrDie(
+    const Computation& computation,
+    tensorflow::gtl::ArraySlice<const ShapedBuffer*> arguments) {
   return ExecuteLocally(computation, arguments, DefaultExecutableBuildOptions(),
                         DefaultExecutableRunOptions())
       .ConsumeValueOrDie();
 }
 
-ScopedShapedBuffer LocalClientTestBase::ExecuteLocallyOrDie(
-    const XlaComputation& computation,
-    absl::Span<const ShapedBuffer* const> arguments,
+std::unique_ptr<ScopedShapedBuffer> LocalClientTestBase::ExecuteLocallyOrDie(
+    const Computation& computation,
+    tensorflow::gtl::ArraySlice<const ShapedBuffer*> arguments,
     const ExecutableBuildOptions& build_options,
     const ExecutableRunOptions& run_options) {
   return ExecuteLocally(computation, arguments, build_options, run_options)
       .ConsumeValueOrDie();
 }
 
-StatusOr<ScopedShapedBuffer> LocalClientTestBase::ExecuteLocally(
-    const XlaComputation& computation,
-    absl::Span<const ShapedBuffer* const> arguments) {
+StatusOr<std::unique_ptr<ScopedShapedBuffer>>
+LocalClientTestBase::ExecuteLocally(
+    const Computation& computation,
+    tensorflow::gtl::ArraySlice<const ShapedBuffer*> arguments) {
   return ExecuteLocally(computation, arguments, DefaultExecutableBuildOptions(),
                         DefaultExecutableRunOptions());
 }
 
-StatusOr<ScopedShapedBuffer> LocalClientTestBase::ExecuteLocally(
-    const XlaComputation& computation,
-    absl::Span<const ShapedBuffer* const> arguments,
+StatusOr<std::unique_ptr<ScopedShapedBuffer>>
+LocalClientTestBase::ExecuteLocally(
+    const Computation& computation,
+    tensorflow::gtl::ArraySlice<const ShapedBuffer*> arguments,
     const ExecutableBuildOptions& build_options,
     const ExecutableRunOptions& run_options) {
   std::vector<const Shape*> argument_layouts(arguments.size());
@@ -188,19 +193,7 @@ StatusOr<ScopedShapedBuffer> LocalClientTestBase::ExecuteLocally(
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<LocalExecutable> executable,
       local_client_->Compile(computation, argument_layouts, build_options));
-  TF_ASSIGN_OR_RETURN(auto ret, executable->Run(arguments, run_options));
-
-  auto device_ordinal =
-      build_options.device_ordinal() == -1 ? 0 : build_options.device_ordinal();
-  auto* stream = run_options.stream();
-  if (!stream) {
-    stream = local_client_->mutable_backend()
-                 ->BorrowStream(device_ordinal)
-                 .ValueOrDie()
-                 .get();
-  }
-  TF_RETURN_IF_ERROR(stream->BlockHostUntilDone());
-  return std::move(ret);
+  return executable->Run(arguments, run_options);
 }
 
 }  // namespace xla

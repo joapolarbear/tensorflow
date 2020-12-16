@@ -1,18 +1,17 @@
 # Description:
 #   contains parts of TensorFlow that are experimental or unstable and which are not supported.
 
-load(
-    "//tensorflow:tensorflow.bzl",
-    "tf_custom_op_library",  # @unused
-    "tf_gen_op_wrapper_py",  # @unused
-)
-
-package(
-    default_visibility = ["//visibility:public"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//visibility:public"])
+
+load(
+    "//tensorflow:tensorflow.bzl",
+    "tf_gen_op_wrapper_py",
+    "tf_custom_op_library",
+)
 
 py_library(
     name = "quantization_py",
@@ -49,4 +48,16 @@ filegroup(
     data = glob([
         "**/*.py",
     ]),
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

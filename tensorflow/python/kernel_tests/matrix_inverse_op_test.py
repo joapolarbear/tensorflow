@@ -23,13 +23,11 @@ import numpy as np
 from tensorflow.python.client import session
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import ops
-from tensorflow.python.framework import test_util
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import linalg_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
 from tensorflow.python.ops import variables
-from tensorflow.python.platform import benchmark
 from tensorflow.python.platform import test
 
 
@@ -38,7 +36,7 @@ class InverseOpTest(test.TestCase):
   def _verifyInverse(self, x, np_type):
     for adjoint in False, True:
       y = x.astype(np_type)
-      with self.cached_session(use_gpu=True):
+      with self.test_session(use_gpu=True):
         # Verify that x^{-1} * x == Identity matrix.
         inv = linalg_ops.matrix_inverse(y, adjoint=adjoint)
         tf_ans = math_ops.matmul(inv, y, adjoint_b=adjoint)
@@ -47,7 +45,7 @@ class InverseOpTest(test.TestCase):
           tiling = list(y.shape)
           tiling[-2:] = [1, 1]
           np_ans = np.tile(np_ans, tiling)
-        out = self.evaluate(tf_ans)
+        out = tf_ans.eval()
         self.assertAllClose(np_ans, out, rtol=1e-4, atol=1e-3)
         self.assertShapeEqual(y, tf_ans)
 
@@ -74,17 +72,15 @@ class InverseOpTest(test.TestCase):
     self._verifyInverseReal(matrix2)
     # A multidimensional batch of 2x2 matrices
     self._verifyInverseReal(self._makeBatch(matrix1, matrix2))
-    if not test.is_built_with_rocm():
-      # ROCm does not support BLAS operations for complex types
-      # Complex
-      matrix1 = matrix1.astype(np.complex64)
-      matrix1 += 1j * matrix1
-      matrix2 = matrix2.astype(np.complex64)
-      matrix2 += 1j * matrix2
-      self._verifyInverseComplex(matrix1)
-      self._verifyInverseComplex(matrix2)
-      # Complex batch
-      self._verifyInverseComplex(self._makeBatch(matrix1, matrix2))
+    # Complex
+    matrix1 = matrix1.astype(np.complex64)
+    matrix1 += 1j * matrix1
+    matrix2 = matrix2.astype(np.complex64)
+    matrix2 += 1j * matrix2
+    self._verifyInverseComplex(matrix1)
+    self._verifyInverseComplex(matrix2)
+    # Complex batch
+    self._verifyInverseComplex(self._makeBatch(matrix1, matrix2))
 
   def testSymmetricPositiveDefinite(self):
     # 2x2 matrices
@@ -94,26 +90,22 @@ class InverseOpTest(test.TestCase):
     self._verifyInverseReal(matrix2)
     # A multidimensional batch of 2x2 matrices
     self._verifyInverseReal(self._makeBatch(matrix1, matrix2))
-    if not test.is_built_with_rocm():
-      # ROCm does not support BLAS operations for complex types
-      # Complex
-      matrix1 = matrix1.astype(np.complex64)
-      matrix1 += 1j * matrix1
-      matrix2 = matrix2.astype(np.complex64)
-      matrix2 += 1j * matrix2
-      self._verifyInverseComplex(matrix1)
-      self._verifyInverseComplex(matrix2)
-      # Complex batch
-      self._verifyInverseComplex(self._makeBatch(matrix1, matrix2))
+    # Complex
+    matrix1 = matrix1.astype(np.complex64)
+    matrix1 += 1j * matrix1
+    matrix2 = matrix2.astype(np.complex64)
+    matrix2 += 1j * matrix2
+    self._verifyInverseComplex(matrix1)
+    self._verifyInverseComplex(matrix2)
+    # Complex batch
+    self._verifyInverseComplex(self._makeBatch(matrix1, matrix2))
 
-  @test_util.deprecated_graph_mode_only
   def testNonSquareMatrix(self):
     # When the inverse of a non-square matrix is attempted we should return
     # an error
     with self.assertRaises(ValueError):
       linalg_ops.matrix_inverse(np.array([[1., 2., 3.], [3., 4., 5.]]))
 
-  @test_util.deprecated_graph_mode_only
   def testWrongDimensions(self):
     # The input to the inverse should be at least a 2-dimensional tensor.
     tensor3 = constant_op.constant([1., 2.])
@@ -122,7 +114,7 @@ class InverseOpTest(test.TestCase):
 
   def testNotInvertible(self):
     # The input should be invertible.
-    with self.cached_session():
+    with self.test_session():
       with self.assertRaisesOpError("Input is not invertible."):
         # All rows of the matrix below add to zero.
         tensor3 = constant_op.constant([[1., 0., -1.], [-1., 1., 0.],
@@ -144,9 +136,8 @@ class InverseOpTest(test.TestCase):
               size=np.prod(shape)).reshape(shape).astype(dtype)
           self._verifyInverseReal(matrix)
 
-  @test_util.deprecated_graph_mode_only
   def testConcurrentExecutesWithoutError(self):
-    with self.session(use_gpu=True) as sess:
+    with self.test_session(use_gpu=True) as sess:
       all_ops = []
       for adjoint_ in True, False:
         matrix1 = random_ops.random_normal([5, 5], seed=42)
@@ -154,7 +145,7 @@ class InverseOpTest(test.TestCase):
         inv1 = linalg_ops.matrix_inverse(matrix1, adjoint=adjoint_)
         inv2 = linalg_ops.matrix_inverse(matrix2, adjoint=adjoint_)
         all_ops += [inv1, inv2]
-      inv = self.evaluate(all_ops)
+      inv = sess.run(all_ops)
       self.assertAllEqual(inv[0], inv[1])
       self.assertAllEqual(inv[2], inv[3])
 
@@ -188,7 +179,7 @@ class MatrixInverseBenchmark(test.Benchmark):
     for adjoint in False, True:
       for shape in self.shapes:
         with ops.Graph().as_default(), \
-            session.Session(config=benchmark.benchmark_config()) as sess, \
+            session.Session() as sess, \
             ops.device("/cpu:0"):
           matrix = self._GenerateMatrix(shape)
           inv = linalg_ops.matrix_inverse(matrix, adjoint=adjoint)
@@ -202,7 +193,7 @@ class MatrixInverseBenchmark(test.Benchmark):
 
         if test.is_gpu_available(True):
           with ops.Graph().as_default(), \
-              session.Session(config=benchmark.benchmark_config()) as sess, \
+              session.Session() as sess, \
               ops.device("/gpu:0"):
             matrix = self._GenerateMatrix(shape)
             inv = linalg_ops.matrix_inverse(matrix, adjoint=adjoint)

@@ -1,14 +1,13 @@
 # Description:
 #   contains parts of TensorFlow that are experimental or unstable and which are not supported.
 
-load("//tensorflow:tensorflow.bzl", "tf_py_test")
-
-package(
-    default_visibility = ["//tensorflow:internal"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:internal"])
+
+load("//tensorflow:tensorflow.bzl", "tf_py_test")
 
 # TODO(yleon): Refactor after one we switching to the V2 kernels.
 py_library(
@@ -29,13 +28,12 @@ py_library(
 
 tf_py_test(
     name = "lookup_ops_test",
-    size = "medium",
+    size = "small",
     srcs = ["lookup_ops_test.py"],
     additional_deps = [
         ":lookup_py",
         "//third_party/py/numpy",
         "@six_archive//:six",
-        "//tensorflow/contrib/data",
         "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:errors",
@@ -48,5 +46,16 @@ tf_py_test(
         "//tensorflow/python:variables",
     ],
     grpc_enabled = True,
-    tags = ["no_windows"],  # TODO: needs investigation on Windows
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

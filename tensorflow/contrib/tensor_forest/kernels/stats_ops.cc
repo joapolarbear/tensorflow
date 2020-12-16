@@ -26,7 +26,6 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
-#include "tensorflow/core/lib/core/refcount.h"
 #include "tensorflow/core/lib/gtl/map_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/mutex.h"
@@ -56,7 +55,7 @@ class CreateFertileStatsVariableOp : public OpKernel {
                 errors::InvalidArgument("Stats config must be a scalar."));
     auto* result = new FertileStatsResource(param_proto_);
     FertileStats stats;
-    if (!ParseProtoUnlimited(&stats, stats_config_t->scalar<tstring>()())) {
+    if (!ParseProtoUnlimited(&stats, stats_config_t->scalar<string>()())) {
       result->Unref();
       OP_REQUIRES(context, false,
                   errors::InvalidArgument("Unable to parse stats config."));
@@ -88,17 +87,18 @@ class FertileStatsSerializeOp : public OpKernel {
   }
 
   void Compute(OpKernelContext* context) override {
-    core::RefCountPtr<FertileStatsResource> fertile_stats_resource;
+    FertileStatsResource* fertile_stats_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 0),
                                            &fertile_stats_resource));
     mutex_lock l(*fertile_stats_resource->get_mutex());
+    core::ScopedUnref unref_me(fertile_stats_resource);
     Tensor* output_config_t = nullptr;
     OP_REQUIRES_OK(
         context, context->allocate_output(0, TensorShape(), &output_config_t));
 
     FertileStats stats;
     fertile_stats_resource->PackToProto(&stats);
-    output_config_t->scalar<tstring>()() = stats.SerializeAsString();
+    output_config_t->scalar<string>()() = stats.SerializeAsString();
   }
 
  private:
@@ -116,10 +116,11 @@ class FertileStatsDeserializeOp : public OpKernel {
   }
 
   void Compute(OpKernelContext* context) override {
-    core::RefCountPtr<FertileStatsResource> fertile_stats_resource;
+    FertileStatsResource* fertile_stats_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 0),
                                            &fertile_stats_resource));
     mutex_lock l(*fertile_stats_resource->get_mutex());
+    core::ScopedUnref unref_me(fertile_stats_resource);
 
     const Tensor* stats_config_t;
     OP_REQUIRES_OK(context, context->input("stats_config", &stats_config_t));
@@ -128,10 +129,9 @@ class FertileStatsDeserializeOp : public OpKernel {
     // Deallocate all the previous objects on the resource.
     fertile_stats_resource->Reset();
     FertileStats stats;
-    OP_REQUIRES(
-        context,
-        ParseProtoUnlimited(&stats, stats_config_t->scalar<tstring>()()),
-        errors::InvalidArgument("Unable to parse stats config."));
+    OP_REQUIRES(context,
+                ParseProtoUnlimited(&stats, stats_config_t->scalar<string>()()),
+                errors::InvalidArgument("Unable to parse stats config."));
 
     fertile_stats_resource->ExtractFromProto(stats);
     fertile_stats_resource->MaybeInitialize();
@@ -145,7 +145,7 @@ class FertileStatsDeserializeOp : public OpKernel {
 // acquired, put it in a waiting queue to come back to later and try the next
 // one.  Once all leaf_ids have been visited, cycle through the waiting ids
 // until they're gone.
-void UpdateStats(const core::RefCountPtr<FertileStatsResource>& resource,
+void UpdateStats(FertileStatsResource* fertile_stats_resource,
                  const std::unique_ptr<TensorDataSet>& data,
                  const TensorInputTarget& target, int num_targets,
                  const Tensor& leaf_ids_tensor,
@@ -183,8 +183,8 @@ void UpdateStats(const core::RefCountPtr<FertileStatsResource>& resource,
     }
 
     bool is_finished;
-    resource->AddExampleToStatsAndInitialize(data, &target, {example_id},
-                                             leaf_id, &is_finished);
+    fertile_stats_resource->AddExampleToStatsAndInitialize(
+        data, &target, {example_id}, leaf_id, &is_finished);
     leaf_lock->unlock();
     if (is_finished) {
       set_lock->lock();
@@ -196,8 +196,8 @@ void UpdateStats(const core::RefCountPtr<FertileStatsResource>& resource,
 
 // Update leaves from start through end in the leaf_examples iterator.
 void UpdateStatsCollated(
-    const core::RefCountPtr<FertileStatsResource>& fertile_stats_resource,
-    const core::RefCountPtr<DecisionTreeResource>& tree_resource,
+    FertileStatsResource* fertile_stats_resource,
+    DecisionTreeResource* tree_resource,
     const std::unique_ptr<TensorDataSet>& data, const TensorInputTarget& target,
     int num_targets,
     const std::unordered_map<int32, std::vector<int>>& leaf_examples,
@@ -246,19 +246,21 @@ class ProcessInputOp : public OpKernel {
     const Tensor& input_weights = context->input(7);
     const Tensor& leaf_ids_tensor = context->input(8);
 
-    std::unique_ptr<TensorDataSet> data_set(
-        new TensorDataSet(input_spec_, random_seed_));
+    std::unique_ptr<TensorDataSet> data_set(new TensorDataSet(input_spec_, 0));
     data_set->set_input_tensors(input_data, sparse_input_indices,
                                 sparse_input_values, sparse_input_shape);
 
-    core::RefCountPtr<FertileStatsResource> fertile_stats_resource;
+    FertileStatsResource* fertile_stats_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 1),
                                            &fertile_stats_resource));
-    core::RefCountPtr<DecisionTreeResource> tree_resource;
+    DecisionTreeResource* tree_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 0),
                                            &tree_resource));
     mutex_lock l1(*fertile_stats_resource->get_mutex());
     mutex_lock l2(*tree_resource->get_mutex());
+
+    core::ScopedUnref unref_stats(fertile_stats_resource);
+    core::ScopedUnref unref_tree(tree_resource);
 
     const int32 num_data = data_set->NumItems();
     auto worker_threads = context->device()->tensorflow_cpu_worker_threads();
@@ -304,8 +306,8 @@ class ProcessInputOp : public OpKernel {
     // from a digits run on local desktop.  Heuristics might be necessary
     // if it really matters that much.
     const int64 costPerUpdate = 1000;
-    auto update = [&target, &leaf_ids_tensor, &num_targets, &data_set,
-                   &fertile_stats_resource, &locks, &set_lock, &ready_to_split,
+    auto update = [this, &target, &leaf_ids_tensor, &num_targets, &data_set,
+                   fertile_stats_resource, &locks, &set_lock, &ready_to_split,
                    num_data](int64 start, int64 end) {
       CHECK(start <= end);
       CHECK(end <= num_data);
@@ -314,8 +316,8 @@ class ProcessInputOp : public OpKernel {
                   static_cast<int32>(end), &ready_to_split);
     };
 
-    auto update_collated = [&target, &num_targets, &fertile_stats_resource,
-                            &tree_resource, &leaf_examples, &set_lock,
+    auto update_collated = [this, &target, &num_targets, fertile_stats_resource,
+                            tree_resource, &leaf_examples, &set_lock,
                             &ready_to_split, &data_set,
                             num_leaves](int64 start, int64 end) {
       CHECK(start <= end);
@@ -359,14 +361,17 @@ class GrowTreeOp : public OpKernel {
   }
 
   void Compute(OpKernelContext* context) override {
-    core::RefCountPtr<FertileStatsResource> fertile_stats_resource;
+    FertileStatsResource* fertile_stats_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 1),
                                            &fertile_stats_resource));
-    core::RefCountPtr<DecisionTreeResource> tree_resource;
+    DecisionTreeResource* tree_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 0),
                                            &tree_resource));
     mutex_lock l1(*fertile_stats_resource->get_mutex());
     mutex_lock l2(*tree_resource->get_mutex());
+
+    core::ScopedUnref unref_stats(fertile_stats_resource);
+    core::ScopedUnref unref_tree(tree_resource);
 
     const Tensor& finished_nodes = context->input(2);
 
@@ -457,15 +462,18 @@ class FinalizeTreeOp : public OpKernel {
   }
 
   void Compute(OpKernelContext* context) override {
-    core::RefCountPtr<DecisionTreeResource> tree_resource;
+    DecisionTreeResource* tree_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 0),
                                            &tree_resource));
-    core::RefCountPtr<FertileStatsResource> fertile_stats_resource;
+    FertileStatsResource* fertile_stats_resource;
     OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 1),
                                            &fertile_stats_resource));
 
     mutex_lock l1(*fertile_stats_resource->get_mutex());
     mutex_lock l2(*tree_resource->get_mutex());
+
+    core::ScopedUnref unref_me(tree_resource);
+    core::ScopedUnref unref_stats(fertile_stats_resource);
 
     // TODO(thomaswc): Add threads
     int num_nodes = tree_resource->decision_tree().decision_tree().nodes_size();

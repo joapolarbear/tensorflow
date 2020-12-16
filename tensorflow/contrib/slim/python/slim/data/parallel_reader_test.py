@@ -39,7 +39,7 @@ class ParallelReaderTest(test.TestCase):
     ops.reset_default_graph()
 
   def _verify_all_data_sources_read(self, shared_queue):
-    with self.cached_session():
+    with self.test_session():
       tfrecord_paths = test_utils.create_tfrecord_files(
           self.get_temp_dir(), num_files=3)
 
@@ -76,7 +76,7 @@ class ParallelReaderTest(test.TestCase):
     self.assertEquals(count0 + count1 + count2, num_reads)
 
   def _verify_read_up_to_out(self, shared_queue):
-    with self.cached_session():
+    with self.test_session():
       num_files = 3
       num_records_per_file = 7
       tfrecord_paths = test_utils.create_tfrecord_files(
@@ -144,16 +144,14 @@ class ParallelReaderTest(test.TestCase):
         capacity=55,
         min_after_dequeue=28,
         dtypes=[dtypes_lib.string, dtypes_lib.string],
-        shapes=[tensor_shape.TensorShape([]),
-                tensor_shape.TensorShape([])])
+        shapes=[tensor_shape.scalar(), tensor_shape.scalar()])
     self._verify_read_up_to_out(shared_queue)
 
   def testReadUpToFromFIFOQueue(self):
     shared_queue = data_flow_ops.FIFOQueue(
         capacity=99,
         dtypes=[dtypes_lib.string, dtypes_lib.string],
-        shapes=[tensor_shape.TensorShape([]),
-                tensor_shape.TensorShape([])])
+        shapes=[tensor_shape.scalar(), tensor_shape.scalar()])
     self._verify_read_up_to_out(shared_queue)
 
 
@@ -163,7 +161,7 @@ class ParallelReadTest(test.TestCase):
     ops.reset_default_graph()
 
   def testTFRecordReader(self):
-    with self.cached_session():
+    with self.test_session():
       self._tfrecord_paths = test_utils.create_tfrecord_files(
           self.get_temp_dir(), num_files=3)
 
@@ -190,7 +188,7 @@ class SinglePassReadTest(test.TestCase):
     ops.reset_default_graph()
 
   def testOutOfRangeError(self):
-    with self.cached_session():
+    with self.test_session():
       [tfrecord_path] = test_utils.create_tfrecord_files(
           self.get_temp_dir(), num_files=1)
 
@@ -198,7 +196,7 @@ class SinglePassReadTest(test.TestCase):
         tfrecord_path, reader_class=io_ops.TFRecordReader)
     init_op = variables.local_variables_initializer()
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       sess.run(init_op)
       with queues.QueueRunners(sess):
         num_reads = 11
@@ -207,7 +205,7 @@ class SinglePassReadTest(test.TestCase):
             sess.run([key, value])
 
   def testTFRecordReader(self):
-    with self.cached_session():
+    with self.test_session():
       [tfrecord_path] = test_utils.create_tfrecord_files(
           self.get_temp_dir(), num_files=1)
 
@@ -215,7 +213,7 @@ class SinglePassReadTest(test.TestCase):
         tfrecord_path, reader_class=io_ops.TFRecordReader)
     init_op = variables.local_variables_initializer()
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       sess.run(init_op)
       with queues.QueueRunners(sess):
         flowers = 0

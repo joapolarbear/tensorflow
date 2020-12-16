@@ -110,19 +110,7 @@ struct ComputeShard<T,
       typename TTypes<bool>::ConstMatrix input,
       typename TTypes<uint8>::Matrix output, bool /*thresh*/, int64 start,
       int64 limit) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    for (int64 i = start; i < limit; ++i) {
-      uint8* out = output.data() + i;
-      const int64 block = *reinterpret_cast<const int64*>(input.data() + 8 * i);
-      *out = ((((block & (1LL << (7 * 8))) >> (7 * 8 - 7))) |
-              (((block & (1LL << (6 * 8))) >> (6 * 8 - 6))) |
-              (((block & (1LL << (5 * 8))) >> (5 * 8 - 5))) |
-              (((block & (1LL << (4 * 8))) >> (4 * 8 - 4))) |
-              (((block & (1LL << (3 * 8))) >> (3 * 8 - 3))) |
-              (((block & (1LL << (2 * 8))) >> (2 * 8 - 2))) |
-              (((block & (1LL << 8)) >> (1 * 8 - 1))) | (((block & (1LL)))));
-    }
-#else
+    // NOTE(ebrevdo): This assumes memory is little-endian.
     for (int64 i = start; i < limit; ++i) {
       uint8* out = output.data() + i;
       const int64 block = *reinterpret_cast<const int64*>(input.data() + 8 * i);
@@ -135,7 +123,6 @@ struct ComputeShard<T,
            (((block & (1LL << (2 * 8))) >> (2 * 8 - 5))) |
            (((block & (1LL << 8)) >> (1 * 8 - 6))) | (((block & (1LL)) << 7)));
     }
-#endif
   }
 };
 
@@ -164,7 +151,7 @@ struct CompareAndBitpack<CPUDevice, T> {
 
 }  // namespace functor
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define REGISTER_COMPARE_AND_BITPACK(type)                                    \
   REGISTER_KERNEL_BUILDER(                                                    \
@@ -193,6 +180,6 @@ TF_CALL_bool(DECLARE_GPU_SPEC)
 
 }  // namespace functor
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 }  // namespace tensorflow

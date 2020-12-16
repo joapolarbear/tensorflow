@@ -34,9 +34,8 @@ class SparseAddOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, ctx->input("a_indices", &a_indices));
     OP_REQUIRES_OK(ctx, ctx->input("b_indices", &b_indices));
-    OP_REQUIRES(ctx,
-                TensorShapeUtils::IsMatrix(a_indices->shape()) &&
-                    TensorShapeUtils::IsMatrix(b_indices->shape()),
+    OP_REQUIRES(ctx, TensorShapeUtils::IsMatrix(a_indices->shape()) &&
+                         TensorShapeUtils::IsMatrix(b_indices->shape()),
                 errors::InvalidArgument(
                     "Input indices should be matrices but received shapes: ",
                     a_indices->shape().DebugString(), " and ",
@@ -47,9 +46,8 @@ class SparseAddOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->input("a_values", &a_values_t));
     OP_REQUIRES_OK(ctx, ctx->input("b_values", &b_values_t));
 
-    OP_REQUIRES(ctx,
-                TensorShapeUtils::IsVector(a_values_t->shape()) &&
-                    TensorShapeUtils::IsVector(b_values_t->shape()),
+    OP_REQUIRES(ctx, TensorShapeUtils::IsVector(a_values_t->shape()) &&
+                         TensorShapeUtils::IsVector(b_values_t->shape()),
                 errors::InvalidArgument(
                     "Input values should be vectors but received shapes: ",
                     a_values_t->shape().DebugString(), " and ",
@@ -64,9 +62,8 @@ class SparseAddOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, ctx->input("a_shape", &a_shape));
     OP_REQUIRES_OK(ctx, ctx->input("b_shape", &b_shape));
-    OP_REQUIRES(ctx,
-                TensorShapeUtils::IsVector(a_shape->shape()) &&
-                    TensorShapeUtils::IsVector(b_shape->shape()),
+    OP_REQUIRES(ctx, TensorShapeUtils::IsVector(a_shape->shape()) &&
+                         TensorShapeUtils::IsVector(b_shape->shape()),
                 errors::InvalidArgument(
                     "Input shapes should be a vector but received shapes ",
                     a_shape->shape().DebugString(), " and ",

@@ -50,7 +50,6 @@ def _training_input_fn():
 
 
 class ExportTest(test.TestCase):
-
   def _get_default_signature(self, export_meta_filename):
     """ Gets the default signature from the export.meta file. """
     with session.Session():
@@ -70,18 +69,18 @@ class ExportTest(test.TestCase):
     # Only the written checkpoints are exported.
     self.assertTrue(
         saver.checkpoint_exists(os.path.join(export_dir, '00000001', 'export')),
-        'Exported checkpoint expected but not found: %s' % os.path.join(
-            export_dir, '00000001', 'export'))
+        'Exported checkpoint expected but not found: %s' %
+        os.path.join(export_dir, '00000001', 'export'))
     self.assertTrue(
         saver.checkpoint_exists(os.path.join(export_dir, '00000010', 'export')),
-        'Exported checkpoint expected but not found: %s' % os.path.join(
-            export_dir, '00000010', 'export'))
+        'Exported checkpoint expected but not found: %s' %
+        os.path.join(export_dir, '00000010', 'export'))
     self.assertEquals(
         six.b(os.path.join(export_dir, '00000010')),
         export_monitor.last_export_dir)
     # Validate the signature
     signature = self._get_default_signature(
-        os.path.join(export_dir, '00000010', 'export.meta'))
+      os.path.join(export_dir, '00000010', 'export.meta'))
     self.assertTrue(signature.HasField(expected_signature))
 
   def testExportMonitor_EstimatorProvidesSignature(self):
@@ -117,7 +116,8 @@ class ExportTest(test.TestCase):
     def _serving_input_fn():
       return {
           _X_KEY:
-              random_ops.random_uniform(shape=(1,), minval=0.0, maxval=1000.0)
+              random_ops.random_uniform(
+                  shape=(1,), minval=0.0, maxval=1000.0)
       }, None
 
     input_feature_key = 'my_example_key'
@@ -160,7 +160,8 @@ class ExportTest(test.TestCase):
           input_feature_key:
               None,
           _X_KEY:
-              random_ops.random_uniform(shape=(1,), minval=0.0, maxval=1000.0)
+              random_ops.random_uniform(
+                  shape=(1,), minval=0.0, maxval=1000.0)
       }, None
 
     monitor = learn.monitors.ExportMonitor(
@@ -181,7 +182,8 @@ class ExportTest(test.TestCase):
     def _serving_input_fn():
       return {
           input_feature_key:
-              array_ops.placeholder(dtype=dtypes.string, shape=(1,))
+              array_ops.placeholder(
+                  dtype=dtypes.string, shape=(1,))
       }, None
 
     monitor = learn.monitors.ExportMonitor(
@@ -202,9 +204,11 @@ class ExportTest(test.TestCase):
     def _serving_input_fn():
       return {
           input_feature_key:
-              array_ops.placeholder(dtype=dtypes.string, shape=(1,)),
+              array_ops.placeholder(
+                  dtype=dtypes.string, shape=(1,)),
           _X_KEY:
-              random_ops.random_uniform(shape=(1,), minval=0.0, maxval=1000.0)
+              random_ops.random_uniform(
+                  shape=(1,), minval=0.0, maxval=1000.0)
       }, None
 
     export_dir = os.path.join(tempfile.mkdtemp(), 'export')
@@ -223,8 +227,8 @@ class ExportTest(test.TestCase):
 
     def _regression_signature(examples, unused_features, predictions):
       signatures = {}
-      signatures['regression'] = (
-          exporter.regression_signature(examples, predictions))
+      signatures['regression'] = (exporter.regression_signature(examples,
+                                                                predictions))
       return signatures['regression'], signatures
 
     random.seed(42)
@@ -244,10 +248,10 @@ class ExportTest(test.TestCase):
     with self.assertRaises(errors.NotFoundError):
       saver.checkpoint_exists(os.path.join(export_dir, '00000000', 'export'))
     self.assertTrue(
-        saver.checkpoint_exists(os.path.join(export_dir, '00000010', 'export')))
+      saver.checkpoint_exists(os.path.join(export_dir, '00000010', 'export')))
     # Validate the signature
     signature = self._get_default_signature(
-        os.path.join(export_dir, '00000010', 'export.meta'))
+      os.path.join(export_dir, '00000010', 'export.meta'))
     self.assertTrue(signature.HasField('regression_signature'))
 
 

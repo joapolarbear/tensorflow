@@ -13,18 +13,14 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Export utilities (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Export utilities."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 from tensorflow.contrib.framework import deprecated
+from tensorflow.python.training import training_util
 from tensorflow.contrib.session_bundle import exporter
 from tensorflow.contrib.session_bundle import gc
 from tensorflow.python.client import session as tf_session
@@ -35,9 +31,7 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import tf_logging as logging
-from tensorflow.python.training import checkpoint_management
 from tensorflow.python.training import saver as tf_saver
-from tensorflow.python.training import training_util
 
 
 @deprecated('2017-03-25', 'Please use Estimator.export_savedmodel() instead.')
@@ -299,8 +293,7 @@ def _export_estimator(estimator,
 
   # If checkpoint_path is specified, use the specified checkpoint path.
   checkpoint_path = (checkpoint_path or
-                     checkpoint_management.latest_checkpoint(
-                         estimator._model_dir))
+                     tf_saver.latest_checkpoint(estimator._model_dir))
   with ops.Graph().as_default() as g:
     training_util.create_global_step(g)
 

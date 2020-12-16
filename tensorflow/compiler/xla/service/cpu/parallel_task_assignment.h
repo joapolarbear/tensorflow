@@ -13,10 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_
-#define TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_
+#ifndef THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_
+#define THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_
 
-#include "tensorflow/compiler/xla/service/cpu/target_machine_features.h"
 #include "tensorflow/compiler/xla/service/hlo_cost_analysis.h"
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/service/hlo_pass_interface.h"
@@ -40,8 +39,7 @@ class ParallelTaskAssignment {
   // 'module': the containing HloModule.
   ParallelTaskAssignment(const int64 max_parallelism,
                          const HloCostAnalysis::ShapeSizeFunction& shape_size,
-                         HloModule* module,
-                         const TargetMachineFeatures* target_machine_features);
+                         HloModule* module);
   ~ParallelTaskAssignment() {}
 
   // Computes and returns the target parallel task count for 'instruction'.
@@ -49,7 +47,6 @@ class ParallelTaskAssignment {
 
  private:
   std::unique_ptr<ParallelCostModel> cost_model_;
-  const TargetMachineFeatures& target_machine_features_;
 };
 
 // ParallelTaskAssigner computes target parallel task counts for all HLOs
@@ -60,20 +57,17 @@ class ParallelTaskAssignment {
 // own embedded computation, which is compiled as a parallel compute function,
 // and which is invoked from a kCall instruction that is lowered in codegen to
 // a runtime parallel fork/join call.
-class ParallelTaskAssigner : public HloModulePass {
+class ParallelTaskAssigner : public HloPassInterface {
  public:
   // 'max_parallelism': the maximum parallel task count per instruction.
   // 'shape_size': shape size function used by HloCostAnalysis during parallel
   //               task assignment.
   ParallelTaskAssigner(const int64 max_parallelism,
-                       const HloCostAnalysis::ShapeSizeFunction& shape_size,
-                       const TargetMachineFeatures* target_machine_features)
-      : max_parallelism_(max_parallelism),
-        shape_size_function_(shape_size),
-        target_machine_features_(*target_machine_features) {}
+                       const HloCostAnalysis::ShapeSizeFunction& shape_size)
+      : max_parallelism_(max_parallelism), shape_size_function_(shape_size) {}
   ~ParallelTaskAssigner() override {}
 
-  absl::string_view name() const override {
+  tensorflow::StringPiece name() const override {
     return "cpu-parallel-task-assigner";
   }
 
@@ -100,10 +94,9 @@ class ParallelTaskAssigner : public HloModulePass {
 
   int64 max_parallelism_;
   HloCostAnalysis::ShapeSizeFunction shape_size_function_;
-  const TargetMachineFeatures& target_machine_features_;
 };
 
 }  // namespace cpu
 }  // namespace xla
 
-#endif  // TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_
+#endif  // THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_CPU_PARALLEL_TASK_ASSIGNMENT_H_

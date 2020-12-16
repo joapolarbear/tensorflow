@@ -22,9 +22,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
-from tensorflow.python.util import deprecation
 from tensorflow.python.util import tf_inspect
-from tensorflow.python.util.tf_export import tf_export
 
 
 _DIVERGENCES = {}
@@ -52,15 +50,6 @@ def _registered_kl(type_a, type_b):
   return kl_fn
 
 
-@deprecation.deprecated(
-    "2019-01-01",
-    "The TensorFlow Distributions library has moved to "
-    "TensorFlow Probability "
-    "(https://github.com/tensorflow/probability). You "
-    "should update all references to use `tfp.distributions` "
-    "instead of `tf.distributions`.",
-    warn_once=True)
-@tf_export(v1=["distributions.kl_divergence"])
 def kl_divergence(distribution_a, distribution_b,
                   allow_nan_stats=True, name=None):
   """Get the KL-divergence KL(distribution_a || distribution_b).
@@ -121,14 +110,6 @@ def kl_divergence(distribution_a, distribution_b,
       return array_ops.identity(kl_t, name="checked_kl")
 
 
-@deprecation.deprecated(
-    "2019-01-01",
-    "The TensorFlow Distributions library has moved to "
-    "TensorFlow Probability "
-    "(https://github.com/tensorflow/probability). You "
-    "should update all references to use `tfp.distributions` "
-    "instead of `tf.distributions`.",
-    warn_once=True)
 def cross_entropy(ref, other,
                   allow_nan_stats=True, name=None):
   """Computes the (Shannon) cross entropy.
@@ -144,8 +125,8 @@ def cross_entropy(ref, other,
   where `F` denotes the support of the random variable `X ~ P`.
 
   Args:
-    ref: `tfd.Distribution` instance.
-    other: `tfd.Distribution` instance.
+    ref: `tf.distributions.Distribution` instance.
+    other: `tf.distributions.Distribution` instance.
     allow_nan_stats: Python `bool`, default `True`. When `True`,
       statistics (e.g., mean, mode, variance) use the value "`NaN`" to
       indicate the result is undefined. When `False`, an exception is raised
@@ -161,7 +142,6 @@ def cross_entropy(ref, other,
         ref, other, allow_nan_stats=allow_nan_stats)
 
 
-@tf_export(v1=["distributions.RegisterKL"])
 class RegisterKL(object):
   """Decorator to register a KL divergence implementation function.
 
@@ -172,14 +152,6 @@ class RegisterKL(object):
     # Return KL(norm_a || norm_b)
   """
 
-  @deprecation.deprecated(
-      "2019-01-01",
-      "The TensorFlow Distributions library has moved to "
-      "TensorFlow Probability "
-      "(https://github.com/tensorflow/probability). You "
-      "should update all references to use `tfp.distributions` "
-      "instead of `tf.distributions`.",
-      warn_once=True)
   def __init__(self, dist_cls_a, dist_cls_b):
     """Initialize the KL registrar.
 

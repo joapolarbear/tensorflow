@@ -24,7 +24,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/tensor_testutil.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/platform/test_benchmark.h"
 #include "tensorflow/core/public/session.h"
@@ -210,10 +209,10 @@ class ConstantFoldingTest : public ::testing::Test {
     for (const NodeDef& node : graph_def.node()) {
       const StringPiece name(node.name());
       const int occurrence_count = folded_node_map.count(node.name());
-      if (str_util::EndsWith(name, "expect_removed")) {
+      if (name.ends_with("expect_removed")) {
         EXPECT_EQ(0, occurrence_count) << "node.name()=" << node.name();
       }
-      if (str_util::EndsWith(name, "expect_remains")) {
+      if (name.ends_with("expect_remains")) {
         EXPECT_EQ(1, occurrence_count) << "node.name()=" << node.name();
       }
     }
@@ -330,44 +329,46 @@ class ConstantFoldingTest : public ::testing::Test {
     EXPECT_EQ(0, node_map.count("unused"));
   }
 
-  void TestMaxConstantSizeInBytes() {
+  void TestRemoveUnusedNodesMultipleOutputs() {
+    using namespace ::tensorflow::ops;  // NOLINT(build/namespaces)
     auto root = tensorflow::Scope::NewRootScope();
 
-    const int width = 100;
-
-    Tensor a_data(DT_FLOAT, TensorShape({width}));
-    test::FillIota<float>(&a_data, 1.0f);
-    Output a_const = ::tensorflow::ops::Const(
-        root.WithOpName("a_expect_remains"), Input::Initializer(a_data));
-
-    Tensor b_data(DT_FLOAT, TensorShape({width}));
-    test::FillIota<float>(&b_data, 1.0f);
-    Output b_const = ::tensorflow::ops::Const(
-        root.WithOpName("b_expect_remains"), Input::Initializer(b_data));
-
-    Output add = ::tensorflow::ops::Add(root.WithOpName("add_expect_remains"),
-                                        a_const, b_const);
-
-    Output placeholder = ::tensorflow::ops::Placeholder(
-        root.WithOpName("placeholder_expect_remains"), DT_FLOAT);
-
-    Output mul = ::tensorflow::ops::Mul(
-        root.WithOpName("output_expect_remains"), add, placeholder);
+    //    a    b
+    //     \  /
+    //    shape_n
+    //     \  /
+    //       c
+    auto a = Placeholder(root.WithOpName("a"), DT_FLOAT);
+    auto b = Placeholder(root.WithOpName("b"), DT_FLOAT);
+    auto shape_n = ShapeN(root.WithOpName("shape_n"), {Output(a), Output(b)});
+    auto c = Add(root.WithOpName("c"), shape_n[0], shape_n[1]);
 
     GraphDef graph_def;
     TF_ASSERT_OK(root.ToGraphDef(&graph_def));
+    GraphDef result_graph_def;
+    TF_ASSERT_OK(graph_transforms::RemoveUnusedNodes(
+        graph_def, {{shape_n[0].name()}, {"c"}}, &result_graph_def));
 
-    Tensor placeholder_tensor(DT_FLOAT, TensorShape({width}));
-    test::FillIota<float>(&placeholder_tensor, 1.0f);
+    // Only one output of shape_n node is fed input. Hence the graph search
+    // should propagate to inputs of shape_n. Nothing to remove here.
+    std::map<string, const NodeDef*> node_map;
+    graph_transforms::MapNamesToNodes(result_graph_def, &node_map);
+    EXPECT_EQ(1, node_map.count("a"));
+    EXPECT_EQ(1, node_map.count("b"));
+    EXPECT_EQ(1, node_map.count("c"));
 
-    // Setting the maximum constant size to 10 bytes should stop the constant
-    // folding at add(a, b) that would have yielded a constant of
-    // 100*sizeof(float) bytes.
-    graph_transforms::TransformFuncContext context;
-    context.params["max_constant_size_in_bytes"] = {"10"};
-    TestConstantFolding(graph_def,
-                        {{"placeholder_expect_remains", placeholder_tensor}},
-                        {}, {"output_expect_remains"}, context);
+    result_graph_def.Clear();
+    TF_ASSERT_OK(graph_transforms::RemoveUnusedNodes(
+        graph_def, {{shape_n[0].name(), shape_n[1].name()}, {"c"}},
+        &result_graph_def));
+
+    // Both outputs of shape_n node are fed inputs. shape_n does not function
+    // and inputs to shape_n should be removed.
+    node_map.clear();
+    graph_transforms::MapNamesToNodes(result_graph_def, &node_map);
+    EXPECT_EQ(0, node_map.count("a"));
+    EXPECT_EQ(0, node_map.count("b"));
+    EXPECT_EQ(1, node_map.count("c"));
   }
 };
 
@@ -389,8 +390,8 @@ TEST_F(ConstantFoldingTest, TestReplaceSendRecvsPrefixNames) {
 
 TEST_F(ConstantFoldingTest, TestRemoveUnusedNodes) { TestRemoveUnusedNodes(); }
 
-TEST_F(ConstantFoldingTest, TestMaxConstantSizeInBytes) {
-  TestMaxConstantSizeInBytes();
+TEST_F(ConstantFoldingTest, TestRemoveUnusedNodesMultipleOutputs) {
+  TestRemoveUnusedNodesMultipleOutputs();
 }
 
 }  // namespace graph_transforms

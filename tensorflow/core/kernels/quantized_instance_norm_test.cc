@@ -22,8 +22,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_testutil.h"
 
 namespace tensorflow {
-namespace ops {
-namespace {
 
 void ReferenceImpl(const quint8* inp, float inp_min, float inp_max,
                    const TensorShape& shape, float var_eps, float* out) {
@@ -80,6 +78,10 @@ void ReferenceImpl(const quint8* inp, float inp_min, float inp_max,
   }
 }
 
+using namespace ops;  // NOLINT(build/namespaces)
+
+namespace {
+
 void Expect(const Tensor& input, float x_min, float x_max,
             bool output_range_given, float give_y_min, float given_y_max) {
   Scope root = Scope::NewRootScope();
@@ -120,6 +122,8 @@ void Expect(const Tensor& input, float x_min, float x_max,
   EXPECT_LE(max_diff(), 0.1);
   LOG(INFO) << "max diff " << max_diff();
 }
+
+}  // end namespace
 
 void TestBasic() {
   Tensor input_tensor(DT_QUINT8, {1, 4, 4, 32});
@@ -169,12 +173,10 @@ void TestClamp() {
   Expect(input_tensor, -10.0f, 10.0f, true, 0.0f, 1.0f);
 }
 
-}  // namespace
-}  // namespace ops
-}  // namespace tensorflow
+}  // end namespace tensorflow
 
 #define RUN_TEST(t) \
-  TEST(QuantizedInstanceNormTest, t) { tensorflow::ops::t(); }
+  TEST(QuantizedAddOpTest, t) { tensorflow::t(); }
 
 RUN_TEST(TestBasic);
 RUN_TEST(TestZeroInput);

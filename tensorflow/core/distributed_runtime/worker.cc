@@ -15,25 +15,18 @@ limitations under the License.
 
 #include "tensorflow/core/distributed_runtime/worker.h"
 
-#include "tensorflow/core/common_runtime/collective_executor_mgr.h"
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/common_runtime/process_util.h"
-#include "tensorflow/core/common_runtime/scoped_allocator_mgr.h"
 #include "tensorflow/core/common_runtime/step_stats_collector.h"
 #include "tensorflow/core/distributed_runtime/rendezvous_mgr_interface.h"
 #include "tensorflow/core/distributed_runtime/tensor_coding.h"
 #include "tensorflow/core/distributed_runtime/worker_session.h"
 #include "tensorflow/core/platform/tracing.h"
-#include "tensorflow/core/profiler/lib/profiler_session.h"
 
 namespace tensorflow {
 
-Worker::Worker(WorkerEnv* env) : env_(env), recent_request_ids_(100000) {
-  // Enable log history collection in StatusGroup so that recent warning and
-  // error log messages will be attached to the root error status to be
-  // forwarded to the master.
-  StatusGroup::ConfigureLogHistory();
-}
+Worker::Worker(WorkerEnv* env)
+    : env_(env), cancellation_manager_(new CancellationManager) {}
 
 void Worker::GetStatusAsync(const GetStatusRequest* request,
                             GetStatusResponse* response, StatusCallback done) {
@@ -50,14 +43,13 @@ void Worker::GetStatusAsync(const GetStatusRequest* request,
 void Worker::CreateWorkerSessionAsync(const CreateWorkerSessionRequest* request,
                                       CreateWorkerSessionResponse* response,
                                       StatusCallback done) {
-  Status s = env_->session_mgr->CreateSession(
-      request->session_handle(), request->server_def(),
-      request->cluster_device_attributes(), request->isolate_session_state());
+  Status s = env_->session_mgr->CreateSession(request->session_handle(),
+                                              request->server_def(),
+                                              request->isolate_session_state());
   done(s);
 }
 
-void Worker::DeleteWorkerSessionAsync(CallOptions* opts,
-                                      const DeleteWorkerSessionRequest* request,
+void Worker::DeleteWorkerSessionAsync(const DeleteWorkerSessionRequest* request,
                                       DeleteWorkerSessionResponse* response,
                                       StatusCallback done) {
   Status s = env_->session_mgr->DeleteSession(request->session_handle());
@@ -67,38 +59,21 @@ void Worker::DeleteWorkerSessionAsync(CallOptions* opts,
 void Worker::RegisterGraphAsync(const RegisterGraphRequest* request,
                                 RegisterGraphResponse* response,
                                 StatusCallback done) {
-  std::shared_ptr<WorkerSession> session;
-  Status s;
-  if (request->create_worker_session_called()) {
-    s = env_->session_mgr->WorkerSessionForSession(request->session_handle(),
-                                                   &session);
-  } else {
-    session = env_->session_mgr->LegacySession();
-  }
-  if (s.ok()) {
-    s = session->graph_mgr->Register(
-        request->session_handle(), request->graph_def(), session.get(),
-        request->graph_options(), request->debug_options(),
-        request->collective_graph_key(), session->cluster_flr.get(),
-        response->mutable_graph_handle());
-  }
+  WorkerSession* session =
+      env_->session_mgr->WorkerSessionForSession(request->session_handle());
+  Status s = session->graph_mgr->Register(
+      request->session_handle(), request->graph_def(), request->graph_options(),
+      request->debug_options(), session->cluster_flr.get(),
+      response->mutable_graph_handle());
   done(s);
 }
 
 void Worker::DeregisterGraphAsync(const DeregisterGraphRequest* request,
                                   DeregisterGraphResponse* response,
                                   StatusCallback done) {
-  std::shared_ptr<WorkerSession> session;
-  Status s;
-  if (request->create_worker_session_called()) {
-    s = env_->session_mgr->WorkerSessionForSession(request->session_handle(),
-                                                   &session);
-  } else {
-    session = env_->session_mgr->LegacySession();
-  }
-  if (s.ok()) {
-    s = session->graph_mgr->Deregister(request->graph_handle());
-  }
+  WorkerSession* session =
+      env_->session_mgr->WorkerSessionForSession(request->session_handle());
+  Status s = session->graph_mgr->Deregister(request->graph_handle());
 
   done(s);
 }
@@ -109,8 +84,7 @@ void Worker::AbortStep(int64 step_id) {
     // Delay a bit before aborting the step. This way, the root
     // cause may return first back to the client instead of this
     // cancellation generated abort error.
-    rendez->StartAbort(errors::Aborted("Step ", step_id,
-                                       " cancelled.  Cancelling rendezvous."));
+    rendez->StartAbort(errors::Aborted("Step ", step_id));
     rendez->Unref();
   });
 }
@@ -135,12 +109,6 @@ Status Worker::PrepareRunGraph(RunGraphRequestWrapper* req,
 void Worker::RunGraphAsync(CallOptions* opts, RunGraphRequestWrapper* request,
                            MutableRunGraphResponseWrapper* response,
                            StatusCallback done) {
-  if (request->store_errors_in_response_body()) {
-    done = [response, done](const Status& status) {
-      response->set_status(status);
-      done(Status::OK());
-    };
-  }
   if (request->is_partial()) {
     DoPartialRunGraph(opts, request, response, std::move(done));
   } else {
@@ -161,27 +129,11 @@ void Worker::DoRunGraph(CallOptions* opts, RunGraphRequestWrapper* request,
                         StatusCallback done) {
   const int64 step_id = request->step_id();
   TRACEPRINTF("RunGraph: %lld", step_id);
-  Status s = recent_request_ids_.TrackUnique(request->request_id(),
-                                             "RunGraph (Worker)", request);
-  if (!s.ok()) {
-    done(s);
-    return;
-  }
-
-  std::shared_ptr<WorkerSession> session;
-  if (request->create_worker_session_called()) {
-    s = env_->session_mgr->WorkerSessionForSession(request->session_handle(),
-                                                   &session);
-  } else {
-    session = env_->session_mgr->LegacySession();
-  }
-  if (!s.ok()) {
-    done(s);
-    return;
-  }
+  WorkerSession* session =
+      env_->session_mgr->WorkerSessionForSession(request->session_handle());
   GraphMgr::NamedTensors in;
   GraphMgr::NamedTensors* out = new GraphMgr::NamedTensors;
-  s = PrepareRunGraph(request, &in, out);
+  Status s = PrepareRunGraph(request, &in, out);
   if (!s.ok()) {
     delete out;
     done(s);
@@ -192,50 +144,42 @@ void Worker::DoRunGraph(CallOptions* opts, RunGraphRequestWrapper* request,
       request->exec_opts().record_timeline() ||
       request->exec_opts().record_costs()) {
     collector = new StepStatsCollector(response->mutable_step_stats());
-  }
-  ProfilerSession* profiler_session = nullptr;
-  if (collector && request->exec_opts().record_timeline()) {
-    // If timeline was requested, assume we want hardware level tracing.
-    profiler_session = ProfilerSession::Create().release();
+    // TODO(mrry,pbar): GPU tracing for distributed steps.
   }
   CancellationManager* cm = new CancellationManager;
   opts->SetCancelCallback([this, cm, step_id]() {
-    LOG(INFO) << "Cancellation requested for RunGraph.";
     cm->StartCancel();
     AbortStep(step_id);
   });
   CancellationToken token;
-  token = cancellation_manager_.get_cancellation_token();
-  bool already_cancelled = !cancellation_manager_.RegisterCallback(
-      token, [cm]() { cm->StartCancel(); });
-  if (already_cancelled) {
-    opts->ClearCancelCallback();
-    delete cm;
-    delete collector;
-    delete profiler_session;
-    delete out;
-    done(errors::Aborted("Call was aborted"));
-    return;
+  {
+    mutex_lock l(mu_);
+    token = cancellation_manager_->get_cancellation_token();
+    bool already_cancelled = !cancellation_manager_->RegisterCallback(
+        token, [cm]() { cm->StartCancel(); });
+    if (already_cancelled) {
+      opts->ClearCancelCallback();
+      delete cm;
+      delete collector;
+      delete out;
+      done(errors::Aborted("Call was aborted"));
+      return;
+    }
   }
   session->graph_mgr->ExecuteAsync(
-      request->graph_handle(), step_id, session.get(), request->exec_opts(),
+      request->graph_handle(), step_id, session, request->exec_opts(),
       collector, response, cm, in,
-      [this, step_id, response, session, cm, out, token, collector,
-       profiler_session, opts, done](const Status& status) {
-        Status s = status;
+      [this, step_id, response, session, cm, out, token, collector, opts,
+       done](Status s) {
         if (s.ok()) {
           s = session->graph_mgr->RecvOutputs(step_id, out);
         }
-
         opts->ClearCancelCallback();
-        cancellation_manager_.DeregisterCallback(token);
-        delete cm;
-
-        if (profiler_session) {
-          RunMetadata run_metadata;
-          profiler_session->CollectData(&run_metadata).IgnoreError();
-          response->mutable_step_stats()->MergeFrom(run_metadata.step_stats());
+        {
+          mutex_lock l(mu_);
+          cancellation_manager_->DeregisterCallback(token);
         }
+        delete cm;
 
         if (s.ok()) {
           for (const auto& p : *out) {
@@ -244,10 +188,8 @@ void Worker::DoRunGraph(CallOptions* opts, RunGraphRequestWrapper* request,
             response->AddRecv(key, val);
           }
         }
-
         if (collector) collector->Finalize();
         delete collector;
-        delete profiler_session;
         delete out;
         done(s);
       });
@@ -261,29 +203,13 @@ void Worker::DoPartialRunGraph(CallOptions* opts,
   const int64 step_id = request->step_id();
   const string& graph_handle = request->graph_handle();
   TRACEPRINTF("PartialRunGraph: %lld", step_id);
-  Status s = recent_request_ids_.TrackUnique(
-      request->request_id(), "PartialRunGraph (Worker)", request);
-  if (!s.ok()) {
-    done(s);
-    return;
-  }
-
-  std::shared_ptr<WorkerSession> session;
-  if (request->create_worker_session_called()) {
-    s = env_->session_mgr->WorkerSessionForSession(request->session_handle(),
-                                                   &session);
-  } else {
-    session = env_->session_mgr->LegacySession();
-  }
-  if (!s.ok()) {
-    done(s);
-    return;
-  }
+  WorkerSession* session =
+      env_->session_mgr->WorkerSessionForSession(request->session_handle());
 
   GraphMgr::NamedTensors in;
   GraphMgr::NamedTensors* out = new GraphMgr::NamedTensors;
-  s = PrepareRunGraph(request, &in, out);
-  auto finish = [done, out, opts](const Status& s) {
+  Status s = PrepareRunGraph(request, &in, out);
+  auto finish = [this, done, out, opts](const Status& s) {
     opts->ClearCancelCallback();
     delete out;
     done(s);
@@ -298,7 +224,6 @@ void Worker::DoPartialRunGraph(CallOptions* opts,
 
   // Before we start doing anything, we set the RPC cancellation.
   opts->SetCancelCallback([this, cm, step_id]() {
-    LOG(INFO) << "Cancellation requested for PartialRunGraph.";
     cm->StartCancel();
     AbortStep(step_id);
   });
@@ -307,14 +232,20 @@ void Worker::DoPartialRunGraph(CallOptions* opts,
   // executors.
   if (is_new_partial_run) {
     CancellationToken token;
-    token = cancellation_manager_.get_cancellation_token();
-    cancellation_manager_.RegisterCallback(token,
-                                           [cm]() { cm->StartCancel(); });
+    {
+      mutex_lock l(mu_);
+      token = cancellation_manager_->get_cancellation_token();
+      cancellation_manager_->RegisterCallback(token,
+                                              [cm]() { cm->StartCancel(); });
+    }
     session->graph_mgr->ExecuteAsync(
-        graph_handle, step_id, session.get(), request->exec_opts(),
+        graph_handle, step_id, session, request->exec_opts(),
         nullptr /* collector */, nullptr /* response */, cm, in,
-        [this, token, step_id, session](Status s) {
-          cancellation_manager_.DeregisterCallback(token);
+        [this, token, step_id, cm](Status s) {
+          {
+            mutex_lock l(mu_);
+            cancellation_manager_->DeregisterCallback(token);
+          }
           partial_run_mgr_.ExecutorDone(step_id, s);
         });
   } else {
@@ -349,15 +280,6 @@ void Worker::CleanupGraphAsync(const CleanupGraphRequest* request,
                                StatusCallback done) {
   const int64 step_id = request->step_id();
   env_->rendezvous_mgr->Cleanup(step_id);
-  if (env_->collective_executor_mgr) {
-    env_->collective_executor_mgr->Cleanup(step_id);
-  }
-  for (Device* d : env_->local_devices) {
-    ScopedAllocatorMgr* sam = d->GetScopedAllocatorMgr();
-    if (sam) {
-      sam->Cleanup(step_id);
-    }
-  }
   done(Status::OK());
 }
 
@@ -380,53 +302,6 @@ void Worker::TracingAsync(const TracingRequest* request,
   done(errors::Unimplemented("Tracing"));
 }
 
-void Worker::RecvBufAsync(CallOptions* opts, const RecvBufRequest* request,
-                          RecvBufResponse* response, StatusCallback done) {
-  // The base Worker class does not implement RecvBufAsync because
-  // it is not currently used for worker-to-worker communication. Use a
-  // transport-specific implementation (such as `GrpcWorker::RecvBufAsync()`)
-  // instead.
-  done(errors::Unimplemented("Worker::RecvBufAsync()"));
-}
-
-void Worker::CompleteGroupAsync(CallOptions* opts,
-                                const CompleteGroupRequest* request,
-                                CompleteGroupResponse* response,
-                                StatusCallback done) {
-  if (env_->collective_executor_mgr) {
-    env_->collective_executor_mgr->GetParamResolver()->CompleteGroupAsync(
-        request, response, &cancellation_manager_, done);
-  } else {
-    done(
-        errors::Internal("Runtime not initialized with CollectiveExecutorMgr"));
-  }
-}
-
-void Worker::CompleteInstanceAsync(CallOptions* opts,
-                                   const CompleteInstanceRequest* request,
-                                   CompleteInstanceResponse* response,
-                                   StatusCallback done) {
-  if (env_->collective_executor_mgr) {
-    env_->collective_executor_mgr->GetParamResolver()->CompleteInstanceAsync(
-        request, response, &cancellation_manager_, done);
-  } else {
-    done(
-        errors::Internal("Runtime not initialized with CollectiveExecutorMgr"));
-  }
-}
-
-void Worker::GetStepSequenceAsync(const GetStepSequenceRequest* request,
-                                  GetStepSequenceResponse* response,
-                                  StatusCallback done) {
-  if (env_->collective_executor_mgr) {
-    env_->collective_executor_mgr->GetStepSequenceAsync(request, response,
-                                                        done);
-  } else {
-    done(
-        errors::Internal("Runtime not initialized with CollectiveExecutorMgr"));
-  }
-}
-
 // Helper for RecvTensor. Validates "key" and returns the source
 // device in "*src_dev".
 Status Worker::PrepareRecvTensor(const Rendezvous::ParsedKey& parsed,
@@ -440,9 +315,7 @@ Status Worker::PrepareRecvTensor(const Rendezvous::ParsedKey& parsed,
     return errors::Aborted(
         "RecvTensor expects a different device incarnation: ",
         parsed.src_incarnation, " vs. ", (*src_dev)->attributes().incarnation(),
-        ". Your worker job (\"",
-        env_->session_mgr->LegacySession()->worker_name,
-        "\") was probably restarted. Check your "
+        ". Your worker job was probably restarted. Check your "
         "worker job for the reason why it was restarted.");
   }
 

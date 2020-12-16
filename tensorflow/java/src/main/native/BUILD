@@ -14,7 +14,7 @@ package(default_visibility = [
 
 licenses(["notice"])  # Apache 2.0
 
-load("//tensorflow:tensorflow.bzl", "tf_copts", "tf_cuda_library")
+load("//tensorflow:tensorflow.bzl", "tf_cuda_library", "tf_copts")
 
 tf_cuda_library(
     name = "native",
@@ -33,13 +33,13 @@ tf_cuda_library(
         "//tensorflow:android": [],
         "//conditions:default": ["."],
     }),
-    deps = select({
+    deps = [
+        "//tensorflow/c:c_api",
+    ] + select({
         "//tensorflow:android": [
             "//tensorflow/core:android_tensorflow_lib",
         ],
         "//conditions:default": [
-            "//tensorflow/c:c_api",
-            "//tensorflow/c/eager:c_api",
             "//tensorflow/core:all_kernels",
             "//tensorflow/core:direct_session",
             "//tensorflow/core:ops",
@@ -67,8 +67,7 @@ genrule(
 genrule(
     name = "copy_jni_md_h",
     srcs = select({
-        "//tensorflow:windows": ["@bazel_tools//tools/jdk:jni_md_header-windows"],
-        "//tensorflow:macos": ["@bazel_tools//tools/jdk:jni_md_header-darwin"],
+        "//tensorflow:darwin": ["@bazel_tools//tools/jdk:jni_md_header-darwin"],
         "//conditions:default": ["@bazel_tools//tools/jdk:jni_md_header-linux"],
     }),
     outs = ["jni_md.h"],

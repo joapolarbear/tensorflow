@@ -20,8 +20,12 @@ limitations under the License.
 
 #include "third_party/eigen3/Eigen/Core"
 
-#include "tensorflow/core/common_runtime/gpu/gpu_id.h"
-#include "tensorflow/core/common_runtime/gpu/gpu_id_manager.h"
+#if GOOGLE_CUDA
+#include "cuda/include/cuda.h"
+#include "cuda/include/cuda_runtime_api.h"
+#include "cuda/include/cudnn.h"
+#endif
+
 #include "tensorflow/core/framework/allocation_description.pb.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/op.h"
@@ -38,7 +42,7 @@ limitations under the License.
 #include "tensorflow/core/lib/core/bits.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/byte_order.h"
+#include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/protobuf.h"
@@ -68,8 +72,7 @@ static std::vector<TensorProto> ExtractTensors(const AttrValue& attr_value) {
       }
       break;
     }
-    default: {
-    }
+    default: {}
   }
   return tensors;
 }
@@ -94,7 +97,7 @@ static void ExtractExtraProperties(
       continue;
     }
     TensorId input_tensor_id = ParseTensorName(input_name);
-    const string input_node_name(input_tensor_id.first);
+    const string input_node_name = input_tensor_id.first.ToString();
 
     auto iter = name_to_node.find(input_node_name);
     if (iter == name_to_node.end()) continue;
@@ -122,7 +125,7 @@ static void ExtractExtraProperties(
 
       // For filename input, the file size can also be useful.
       if (op_def && i < op_def->input_arg_size() &&
-          op_def->input_arg(i).name().find("filename") != string::npos) {
+          op_def->input_arg(i).name().find("filename") != std::string::npos) {
         Tensor tensor;
         if (!tensor.FromProto(t)) {
           continue;
@@ -130,7 +133,7 @@ static void ExtractExtraProperties(
         if (tensor.NumElements() != 1) {
           continue;
         }
-        const string& filename = tensor.scalar<tstring>()();
+        const string filename = tensor.scalar<string>()();
 
         Env* env = Env::Default();
         FileStatistics stat;
@@ -148,7 +151,7 @@ static void ExtractExtraProperties(
     // When the input is a handle (e.g. look up table handle), the information
     // in the op itself is not sufficient to predict the op memory.
     if (op_def && i < op_def->input_arg_size() &&
-        op_def->input_arg(i).name().find("handle") != string::npos) {
+        op_def->input_arg(i).name().find("handle") != std::string::npos) {
       string new_key = strings::StrCat("parent_", i, "_op");
       AttrValue attr;
       attr.set_s(input_node->op());
@@ -167,7 +170,7 @@ std::vector<OpInfo::TensorProperties> FindInputFeatures(
   for (const auto& input_name : node.input()) {
     CHECK(!input_name.empty());
     TensorId input_tensor_id = ParseTensorName(input_name);
-    const string input_node_name(input_tensor_id.first);
+    const string input_node_name = input_tensor_id.first.ToString();
     const int output_index = input_tensor_id.second;
 
     // Skip control inputs.
@@ -196,63 +199,18 @@ std::vector<OpInfo::TensorProperties> FindInputFeatures(
   return inputs;
 }
 
-int64 CalculateTensorSize(const OpInfo::TensorProperties& prop) {
-  int64 size = DataTypeSize(BaseType(prop.dtype()));
-  TensorShapeProto shape = prop.shape();
-
-  // Can't infer the size if the rank is unknown. It has to be at least a
-  // scalar though.
-  if (shape.unknown_rank()) {
-    VLOG(2) << "CalculateTensorSize() -- unknown rank";
-    return size;
-  }
-
-  // If one of the dimensions is unknown statically, assume it's at least one.
-  for (int i = 0; i < shape.dim_size(); ++i) {
-    if (shape.dim(i).size() < 0) {
-      shape.mutable_dim(i)->set_size(1);
-      VLOG(2) << "CalculateTensorSize() -- unknown dim: " << i;
-    }
-  }
-
-  int64 num_elems = TensorShape(shape).num_elements();
-  return num_elems * size;
-}
-
-int64 CalculateOutputSize(
-    const std::vector<OpInfo::TensorProperties>& output_properties,
-    const int port_num) {
-  if (port_num < 0) return 4;  // 4B for control dependency.
-
-  if (port_num >= output_properties.size()) {
-    LOG(ERROR) << "CalculateOutputSize() -- port_num: " << port_num
-               << " >= output_properties.size(): " << output_properties.size();
-    return 0;
-  }
-
-  return CalculateTensorSize(output_properties[port_num]);
-}
-
 DeviceProperties GetDeviceInfo(const string& device_str) {
-  DeviceProperties unknown;
-  unknown.set_type("UNKNOWN");
-
   DeviceNameUtils::ParsedName parsed;
   if (DeviceNameUtils::ParseFullName(device_str, &parsed)) {
     if (parsed.type == "GPU") {
-      TfGpuId tf_gpu_id(parsed.id);
-      PlatformGpuId platform_gpu_id;
-      Status s = GpuIdManager::TfToPlatformGpuId(tf_gpu_id, &platform_gpu_id);
-      if (!s.ok()) {
-        // We are probably running simulation without linking cuda libraries.
-        platform_gpu_id = PlatformGpuId(parsed.id);
-      }
-      return GetLocalGPUInfo(platform_gpu_id);
+      return GetLocalGPUInfo(parsed.id);
     } else if (parsed.type == "CPU") {
       return GetLocalCPUInfo();
     }
   }
-  return unknown;
+  DeviceProperties device;
+  device.set_type("UNKNOWN");
+  return device;
 }
 
 DeviceProperties GetDeviceInfo(const CostGraphDef::Node& node) {
@@ -327,10 +285,14 @@ OpPerformanceList CostGraphToOpPerformanceData(const CostGraphDef& cost_graph,
       perf->mutable_op_memory()->add_output_memory(output_info.size());
     }
 
-    perf->mutable_op_memory()->set_temp_memory(
-        cost_node->temporary_memory_size());
-    perf->mutable_op_memory()->set_persistent_memory(
-        cost_node->persistent_memory_size());
+    perf->mutable_op_memory()->set_host_temp_memory(
+        cost_node->host_temp_memory_size());
+    perf->mutable_op_memory()->set_device_temp_memory(
+        cost_node->device_temp_memory_size());
+    perf->mutable_op_memory()->set_host_persistent_memory(
+        cost_node->host_persistent_memory_size());
+    perf->mutable_op_memory()->set_device_persistent_memory(
+        cost_node->device_persistent_memory_size());
   }
   return ret;
 }
@@ -352,8 +314,8 @@ void TensorSizeHistogram::Merge(const TensorSizeHistogram& src) {
                  buckets_.begin(), std::plus<uint64>());
 }
 
-string TensorSizeHistogram::ToString() const {
-  string r;
+std::string TensorSizeHistogram::ToString() const {
+  std::string r;
   char buf[200];
   snprintf(buf, sizeof(buf), "Count: %lld, Average: ", num_elem_);
   r.append(buf);

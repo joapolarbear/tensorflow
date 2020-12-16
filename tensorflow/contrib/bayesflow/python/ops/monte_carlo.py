@@ -14,7 +14,7 @@
 # ==============================================================================
 """Monte Carlo integration and helpers.
 
-Use [tfp.monte_carlo](/probability/api_docs/python/tfp/monte_carlo) instead.
+See the @{$python/contrib.bayesflow.monte_carlo} guide.
 """
 
 from __future__ import absolute_import

@@ -21,8 +21,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "third_party/gpus/cuda/include/cublas_v2.h"
-#include "third_party/gpus/cuda/include/cusolverDn.h"
+#include "cuda/include/cublas_v2.h"
+#include "cuda/include/cusolverDn.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/types.h"
@@ -34,6 +34,8 @@
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/platform/types.h"
+
+using ::perftools::gputools::cuda::ScopedActivateExecutorContext;
 
 // The CUDA cublas_api.h API contains const-correctness errors. Instead of
 // casting away constness on our data, we instead reinterpret the CuBLAS
@@ -78,12 +80,10 @@ using matinv_Z = cublasStatus_t(cublasContext*, int, const double2* const*, int,
 namespace tensorflow {
 namespace {
 
-using se::cuda::ScopedActivateExecutorContext;
-
 inline bool CopyHostToDevice(OpKernelContext* context, void* dst,
                              const void* src, uint64 bytes) {
   auto stream = context->op_device_context()->stream();
-  se::DeviceMemoryBase wrapped_dst(dst);
+  perftools::gputools::DeviceMemoryBase wrapped_dst(dst);
   return stream->ThenMemcpy(&wrapped_dst, src, bytes).ok();
 }
 
@@ -151,7 +151,7 @@ CudaSolver::CudaSolver(OpKernelContext* context) : context_(context) {
       reinterpret_cast<const cudaStream_t*>(context->op_device_context()
                                                 ->stream()
                                                 ->implementation()
-                                                ->GpuStreamMemberHack()));
+                                                ->CudaStreamMemberHack()));
   cuda_stream_ = *cu_stream_ptr;
   HandleMap* handle_map = CHECK_NOTNULL(GetHandleMapSingleton());
   auto it = handle_map->find(cuda_stream_);
@@ -314,11 +314,6 @@ Status CudaSolver::forward_input_or_allocate_scoped_tensor(
 // are sometimes inaccurate, e.g., are missing 'const' on pointers
 // to immutable arguments, while the actual headers have them as expected.
 // Check the actual declarations in the cusolver_api.h header file.
-//
-// NOTE: The cuSolver functions called below appear not to be threadsafe.
-// so we put a global lock around the calls. Since these functions only put a
-// kernel on the shared stream, it is not a big performance hit.
-// TODO(rmlarsen): Investigate if the locking is still needed in Cuda 9.
 //=============================================================================
 
 template <typename Scalar, typename SolverFnT>
@@ -329,7 +324,6 @@ static inline Status GeamImpl(SolverFnT solver, cublasHandle_t cublas_handle,
                               const Scalar* A, int lda,
                               const Scalar* beta, /* host or device pointer */
                               const Scalar* B, int ldb, Scalar* C, int ldc) {
-  mutex_lock lock(handle_map_mutex);
   using CudaScalar = typename CUDAComplexT<Scalar>::type;
   TF_RETURN_IF_CUBLAS_ERROR(solver(cublas_handle, transa, transb, m, n,
                                    reinterpret_cast<const CudaScalar*>(alpha),
@@ -361,7 +355,6 @@ static inline Status PotrfImpl(BufSizeFnT bufsize, SolverFnT solver,
                                cusolverDnHandle_t cusolver_dn_handle,
                                cublasFillMode_t uplo, int n, Scalar* A, int lda,
                                int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(
@@ -387,43 +380,6 @@ static inline Status PotrfImpl(BufSizeFnT bufsize, SolverFnT solver,
 
 TF_CALL_LAPACK_TYPES(POTRF_INSTANCE);
 
-#if CUDA_VERSION >= 9020
-template <typename Scalar, typename SolverFnT>
-static inline Status PotrfBatchedImpl(
-    SolverFnT solver, CudaSolver* cuda_solver, OpKernelContext* context,
-    cusolverDnHandle_t cusolver_dn_handle, cublasFillMode_t uplo, int n,
-    const Scalar* const host_a_dev_ptrs[], int lda,
-    DeviceLapackInfo* dev_lapack_info, int batch_size) {
-  mutex_lock lock(handle_map_mutex);
-  using CudaScalar = typename CUDAComplexT<Scalar>::type;
-  ScratchSpace<uint8> dev_a_dev_ptrs =
-      cuda_solver->GetScratchSpace<uint8>(sizeof(CudaScalar*) * batch_size, "",
-                                          /* on_host */ false);
-  if (!CopyHostToDevice(context, dev_a_dev_ptrs.mutable_data() /* dest */,
-                        host_a_dev_ptrs /* source */, dev_a_dev_ptrs.bytes())) {
-    return errors::Internal("PotrfBatched: failed to copy pointers to device");
-  }
-  TF_RETURN_IF_CUSOLVER_ERROR(
-      solver(cusolver_dn_handle, uplo, n,
-             reinterpret_cast<CudaScalar**>(dev_a_dev_ptrs.mutable_data()), lda,
-             dev_lapack_info->mutable_data(), batch_size));
-  return Status::OK();
-}
-
-#define POTRF_BATCHED_INSTANCE(Scalar, type_prefix)                        \
-  template <>                                                              \
-  Status CudaSolver::PotrfBatched(                                         \
-      cublasFillMode_t uplo, int n, const Scalar* const host_a_dev_ptrs[], \
-      int lda, DeviceLapackInfo* dev_lapack_info, int batch_size) {        \
-    return PotrfBatchedImpl(DN_SOLVER_FN(potrfBatched, type_prefix), this, \
-                            context_, cusolver_dn_handle_, uplo, n,        \
-                            host_a_dev_ptrs, lda, dev_lapack_info,         \
-                            batch_size);                                   \
-  }
-
-TF_CALL_LAPACK_TYPES(POTRF_BATCHED_INSTANCE);
-#endif  // CUDA_VERSION >= 9020
-
 template <typename Scalar, typename BufSizeFnT, typename SolverFnT>
 static inline Status GetrfImpl(BufSizeFnT bufsize, SolverFnT solver,
                                CudaSolver* cuda_solver,
@@ -431,7 +387,6 @@ static inline Status GetrfImpl(BufSizeFnT bufsize, SolverFnT solver,
                                cusolverDnHandle_t cusolver_dn_handle, int m,
                                int n, Scalar* A, int lda, int* dev_pivots,
                                int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(
@@ -464,6 +419,9 @@ static inline Status GetrsImpl(SolverFnT solver, OpKernelContext* context,
                                cublasOperation_t trans, int n, int nrhs,
                                const Scalar* A, int lda, const int* pivots,
                                Scalar* B, int ldb, int* dev_lapack_info) {
+  // Note: The cuSolver functions called here appear not to be threadsafe.
+  // so we put a global lock around it. Since this function only puts a
+  // kernel on the stream, it is not a big performance hit.
   mutex_lock lock(handle_map_mutex);
   /* Launch the solver kernel. */
   TF_RETURN_IF_CUSOLVER_ERROR(solver(cusolver_dn_handle, trans, n, nrhs,
@@ -491,7 +449,6 @@ static inline Status GeqrfImpl(BufSizeFnT bufsize, SolverFnT solver,
                                cusolverDnHandle_t cusolver_dn_handle, int m,
                                int n, Scalar* A, int lda, Scalar* tau,
                                int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(
@@ -526,7 +483,6 @@ static inline Status UnmqrImpl(BufSizeFnT bufsize, SolverFnT solver,
                                int m, int n, int k, const Scalar* dev_a,
                                int lda, const Scalar* dev_tau, Scalar* dev_c,
                                int ldc, int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(
@@ -570,7 +526,6 @@ static inline Status UngqrImpl(BufSizeFnT bufsize, SolverFnT solver,
                                cusolverDnHandle_t cusolver_dn_handle, int m,
                                int n, int k, Scalar* dev_a, int lda,
                                const Scalar* dev_tau, int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(bufsize(cusolver_dn_handle, m, n, k,
@@ -651,13 +606,17 @@ static inline Status GesvdImpl(
     OpKernelContext* context, cusolverDnHandle_t cusolver_dn_handle,
     signed char jobu, signed char jobvt, int m, int n, Scalar* A, int lda,
     Scalar* S, Scalar* U, int ldu, Scalar* VT, int ldvt, int* dev_lapack_info) {
-  mutex_lock lock(handle_map_mutex);
   /* Get amount of workspace memory required. */
   int lwork;
   TF_RETURN_IF_CUSOLVER_ERROR(bufsize(cusolver_dn_handle, m, n, &lwork));
   /* Allocate device memory for workspace. */
   auto dev_workspace =
       cuda_solver->GetScratchSpace<Scalar>(lwork, "", /* on_host */ false);
+  // Note: The cuSolver functions called here appear not to be threadsafe.
+  // so we put a global lock around it. Since this function only puts a
+  // kernel on the stream, it is not a big performance hit.
+  mutex_lock lock(handle_map_mutex);
+  /* Launch the solver kernel. */
   TF_RETURN_IF_CUSOLVER_ERROR(solver(cusolver_dn_handle, jobu, jobvt, m, n,
                                      CUDAComplex(A), lda, S, CUDAComplex(U),
                                      ldu, CUDAComplex(VT), ldvt,
@@ -680,50 +639,6 @@ static inline Status GesvdImpl(
 
 TF_CALL_LAPACK_TYPES_NO_COMPLEX(GESVD_INSTANCE);
 
-template <typename Scalar, typename BufSizeFnT, typename SolverFnT>
-static inline Status GesvdjBatchedImpl(BufSizeFnT bufsize, SolverFnT solver,
-                                       CudaSolver* cuda_solver,
-                                       OpKernelContext* context,
-                                       cusolverDnHandle_t cusolver_dn_handle,
-                                       cusolverEigMode_t jobz, int m, int n,
-                                       Scalar* A, int lda, Scalar* S, Scalar* U,
-                                       int ldu, Scalar* V, int ldv,
-                                       int* dev_lapack_info, int batch_size) {
-  mutex_lock lock(handle_map_mutex);
-  /* Get amount of workspace memory required. */
-  int lwork;
-  /* Default parameters for gesvdj and gesvdjBatched. */
-  gesvdjInfo_t svdj_info;
-  TF_RETURN_IF_CUSOLVER_ERROR(cusolverDnCreateGesvdjInfo(&svdj_info));
-  TF_RETURN_IF_CUSOLVER_ERROR(bufsize(
-      cusolver_dn_handle, jobz, m, n, CUDAComplex(A), lda, S, CUDAComplex(U),
-      ldu, CUDAComplex(V), ldv, &lwork, svdj_info, batch_size));
-  /* Allocate device memory for workspace. */
-  auto dev_workspace =
-      cuda_solver->GetScratchSpace<Scalar>(lwork, "", /* on_host */ false);
-  TF_RETURN_IF_CUSOLVER_ERROR(solver(
-      cusolver_dn_handle, jobz, m, n, CUDAComplex(A), lda, S, CUDAComplex(U),
-      ldu, CUDAComplex(V), ldv, CUDAComplex(dev_workspace.mutable_data()),
-      lwork, dev_lapack_info, svdj_info, batch_size));
-  TF_RETURN_IF_CUSOLVER_ERROR(cusolverDnDestroyGesvdjInfo(svdj_info));
-  return Status::OK();
-}
-
-#define GESVDJBATCHED_INSTANCE(Scalar, type_prefix)                            \
-  template <>                                                                  \
-  Status CudaSolver::GesvdjBatched<Scalar>(                                    \
-      cusolverEigMode_t jobz, int m, int n, Scalar* dev_A, int lda,            \
-      Scalar* dev_S, Scalar* dev_U, int ldu, Scalar* dev_V, int ldv,           \
-      int* dev_lapack_info, int batch_size) {                                  \
-    return GesvdjBatchedImpl(DN_BUFSIZE_FN(gesvdjBatched, type_prefix),        \
-                             DN_SOLVER_FN(gesvdjBatched, type_prefix), this,   \
-                             context_, cusolver_dn_handle_, jobz, m, n, dev_A, \
-                             lda, dev_S, dev_U, ldu, dev_V, ldv,               \
-                             dev_lapack_info, batch_size);                     \
-  }
-
-TF_CALL_LAPACK_TYPES_NO_COMPLEX(GESVDJBATCHED_INSTANCE);
-
 //=============================================================================
 // Wrappers of cuBlas computational methods begin here.
 //
@@ -740,7 +655,6 @@ static inline Status GetrfBatchedImpl(SolverFnT solver, CudaSolver* cuda_solver,
                                       int lda, int* dev_pivots,
                                       DeviceLapackInfo* dev_lapack_info,
                                       int batch_size) {
-  mutex_lock lock(handle_map_mutex);
   using CudaScalar = typename CUDAComplexT<Scalar>::type;
   ScratchSpace<uint8> dev_a_dev_ptrs =
       cuda_solver->GetScratchSpace<uint8>(sizeof(CudaScalar*) * batch_size, "",
@@ -773,9 +687,8 @@ static inline Status GetrsBatchedImpl(
     SolverFnT solver, CudaSolver* cuda_solver, OpKernelContext* context,
     cublasHandle_t cublas_handle, cublasOperation_t trans, int n, int nrhs,
     const Scalar* const host_a_dev_ptrs[], int lda, const int* dev_pivots,
-    const Scalar* const host_b_dev_ptrs[], int ldb, int* host_lapack_info,
-    int batch_size) {
-  mutex_lock lock(handle_map_mutex);
+    const Scalar* const host_b_dev_ptrs[], int ldb,
+    DeviceLapackInfo* dev_lapack_info, int batch_size) {
   using CudaScalar = typename CUDAComplexT<Scalar>::type;
   ScratchSpace<uint8> dev_a_dev_ptrs =
       cuda_solver->GetScratchSpace<uint8>(sizeof(CudaScalar*) * batch_size, "",
@@ -795,7 +708,7 @@ static inline Status GetrsBatchedImpl(
       cublas_handle, trans, n, nrhs,
       reinterpret_cast<const CudaScalar* const*>(dev_a_dev_ptrs.data()), lda,
       dev_pivots, reinterpret_cast<CudaScalar**>(dev_b_dev_ptrs.mutable_data()),
-      ldb, host_lapack_info, batch_size));
+      ldb, dev_lapack_info->mutable_data(), batch_size));
   return Status::OK();
 }
 
@@ -804,13 +717,13 @@ static inline Status GetrsBatchedImpl(
   Status CudaSolver::GetrsBatched(                                             \
       cublasOperation_t trans, int n, int nrhs,                                \
       const Scalar* const host_a_dev_ptrs[], int lda, const int* dev_pivots,   \
-      const Scalar* const host_b_dev_ptrs[], int ldb, int* host_lapack_info,   \
-      int batch_size) {                                                        \
+      const Scalar* const host_b_dev_ptrs[], int ldb,                          \
+      DeviceLapackInfo* dev_lapack_info, int batch_size) {                     \
     return GetrsBatchedImpl(reinterpret_cast<getrs_##type_prefix*>(            \
                                 BLAS_SOLVER_FN(getrsBatched, type_prefix)),    \
                             this, context_, cublas_handle_, trans, n, nrhs,    \
                             host_a_dev_ptrs, lda, dev_pivots, host_b_dev_ptrs, \
-                            ldb, host_lapack_info, batch_size);                \
+                            ldb, dev_lapack_info, batch_size);                 \
   }
 
 TF_CALL_LAPACK_TYPES(GETRS_BATCHED_INSTANCE);
@@ -821,7 +734,6 @@ static inline Status GetriBatchedImpl(
     cublasHandle_t cublas_handle, int n, const Scalar* const host_a_dev_ptrs[],
     int lda, const int* dev_pivots, const Scalar* const host_a_inv_dev_ptrs[],
     int ldainv, DeviceLapackInfo* dev_lapack_info, int batch_size) {
-  mutex_lock lock(handle_map_mutex);
   using CudaScalar = typename CUDAComplexT<Scalar>::type;
   ScratchSpace<uint8> dev_a_dev_ptrs =
       cuda_solver->GetScratchSpace<uint8>(sizeof(CudaScalar*) * batch_size, "",
@@ -864,7 +776,6 @@ static inline Status MatInvBatchedImpl(
     cublasHandle_t cublas_handle, int n, const Scalar* const host_a_dev_ptrs[],
     int lda, const Scalar* const host_a_inv_dev_ptrs[], int ldainv,
     DeviceLapackInfo* dev_lapack_info, int batch_size) {
-  mutex_lock lock(handle_map_mutex);
   using CudaScalar = typename CUDAComplexT<Scalar>::type;
   ScratchSpace<uint8> dev_a_dev_ptrs =
       cuda_solver->GetScratchSpace<uint8>(sizeof(CudaScalar*) * batch_size, "",

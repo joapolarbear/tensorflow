@@ -15,30 +15,39 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/hlo_graph_dumper.h"
 
-#include "absl/strings/str_cat.h"
-#include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/service/hlo_computation.h"
 #include "tensorflow/compiler/xla/service/hlo_instruction.h"
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/service/hlo_opcode.h"
 #include "tensorflow/compiler/xla/test.h"
-#include "tensorflow/compiler/xla/tests/hlo_test_base.h"
 #include "tensorflow/compiler/xla/tests/test_utils.h"
 #include "tensorflow/compiler/xla/xla.pb.h"
+#include "tensorflow/core/lib/strings/strcat.h"
 
 namespace xla {
 namespace {
 
-using absl::StrCat;
+using ::tensorflow::strings::StrCat;
 using ::testing::HasSubstr;
-
-using HloGraphDumperTest = HloTestBase;
 
 string TestName() {
   return ::testing::UnitTest::GetInstance()->current_test_info()->name();
 }
 
-TEST_F(HloGraphDumperTest, NestedFusion) {
+class DotRenderer : public hlo_graph_dumper::GraphRendererInterface {
+ public:
+  string RenderGraph(const string& graph, GraphKind graph_kind,
+                     const DebugOptions& debug_options) override {
+    return graph;
+  }
+
+ private:
+  string last_graph_;
+};
+
+XLA_REGISTER_GRAPH_RENDERER(DotRenderer);
+
+TEST(HloGraphDumperTest, NestedFusion) {
   HloComputation::Builder b("b");
 
   // Build param0 + param1 + param2 + param3 + param4.
@@ -55,8 +64,8 @@ TEST_F(HloGraphDumperTest, NestedFusion) {
     sums.push_back(b.AddInstruction(HloInstruction::CreateBinary(
         shape, HloOpcode::kAdd, sums[i], params[i + 2])));
   }
-  HloModuleConfig config;
-  HloModule m(TestName(), config);
+
+  HloModule m(TestName());
   m.AddEntryComputation(b.Build());
   HloComputation* root_computation = m.entry_computation();
 
@@ -80,9 +89,8 @@ TEST_F(HloGraphDumperTest, NestedFusion) {
           {fused_sums[1], fused_sums[0]}, HloInstruction::FusionKind::kLoop);
 
   // Generate the graph; all nodes should be present.
-  TF_ASSERT_OK_AND_ASSIGN(
-      string graph, RenderGraph(*root_computation, /*label=*/"", DebugOptions(),
-                                RenderedGraphFormat::kDot));
+  string graph = hlo_graph_dumper::DumpGraph(*root_computation, /*label=*/"",
+                                             DebugOptions());
   for (const HloComputation* computation :
        {root_computation,  //
         inner_fusion->fused_instructions_computation(),
@@ -104,62 +112,9 @@ TEST_F(HloGraphDumperTest, NestedFusion) {
     }
   }
   ASSERT_NE(inner_sum, nullptr);
-  TF_ASSERT_OK_AND_ASSIGN(string neighborhood_graph,
-                          RenderNeighborhoodAround(*inner_sum, /*radius=*/1,
-                                                   RenderedGraphFormat::kDot));
-  EXPECT_THAT(neighborhood_graph, HasSubstr(inner_sum->name()));
-}
-
-TEST_F(HloGraphDumperTest, Constant) {
-  HloComputation::Builder b("b");
-  auto instruction = b.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(-42)));
-  instruction->SetAndSanitizeName("i_am_a_constant_root_instruction");
-  HloModuleConfig config;
-  HloModule m(TestName(), config);
-  HloComputation* root_computation = m.AddEntryComputation(b.Build());
-  TF_ASSERT_OK_AND_ASSIGN(
-      string graph, RenderGraph(*root_computation, /*label=*/"an_empty_graph",
-                                DebugOptions(), RenderedGraphFormat::kDot));
-  EXPECT_THAT(graph, HasSubstr("an_empty_graph"));
-  EXPECT_THAT(graph, Not(HasSubstr("i_am_a_constant_root_instruction")));
-}
-
-TEST_F(HloGraphDumperTest, TupleConstant) {
-  Shape tuple_shape = ShapeUtil::MakeTupleShape(
-      {ShapeUtil::MakeShape(F32, {3, 2}), ShapeUtil::MakeShape(S32, {4, 5})});
-  HloComputation::Builder b("b");
-  auto constant = b.AddInstruction(
-      HloInstruction::CreateConstant(Literal::CreateFromShape(tuple_shape)));
-  auto gte = b.AddInstruction(HloInstruction::CreateGetTupleElement(
-      ShapeUtil::MakeShape(F32, {3, 2}), constant, 0));
-
-  HloModuleConfig config;
-  HloModule m(TestName(), config);
-  HloComputation* root_computation = m.AddEntryComputation(b.Build(gte));
-  TF_ASSERT_OK_AND_ASSIGN(
-      string graph, RenderGraph(*root_computation, /*label=*/"tuple_constant",
-                                DebugOptions(), RenderedGraphFormat::kDot));
-  EXPECT_THAT(graph, HasSubstr("tuple_constant"));
-  EXPECT_THAT(graph, HasSubstr("constant (f32[3,2], s32[4,5])"));
-}
-
-TEST_F(HloGraphDumperTest, Compare) {
-  const char* hlo_string = R"(
-    HloModule comp
-
-    ENTRY comp {
-      param.0 = f32[10] parameter(0)
-      param.1 = f32[10] parameter(1)
-      ROOT lt = pred[10] compare(param.0, param.1), direction=LT
-    })";
-  TF_ASSERT_OK_AND_ASSIGN(auto module,
-                          ParseAndReturnVerifiedModule(hlo_string));
-  TF_ASSERT_OK_AND_ASSIGN(
-      string graph,
-      RenderGraph(*module->entry_computation(), /*label=*/"tuple_constant",
-                  DebugOptions(), RenderedGraphFormat::kDot));
-  EXPECT_THAT(graph, HasSubstr("direction=LT"));
+  EXPECT_THAT(
+      hlo_graph_dumper::DumpNeighborhoodAround(*inner_sum, /*radius=*/1),
+      HasSubstr(inner_sum->name()));
 }
 
 }  // anonymous namespace

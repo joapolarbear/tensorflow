@@ -31,7 +31,6 @@ from tensorflow.python.ops import string_ops
 from tensorflow.python.platform import test
 
 
-@test_util.run_deprecated_v1
 class Base64OpsTest(test_util.TensorFlowTestCase):
 
   def setUp(self):
@@ -49,7 +48,7 @@ class Base64OpsTest(test_util.TensorFlowTestCase):
     return base64_msg
 
   def _RunTest(self, msg, pad):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       if pad:
         encoded, decoded = sess.run([self._encoded_t, self._decoded_t],
                                     feed_dict={self._msg: msg})
@@ -93,8 +92,8 @@ class Base64OpsTest(test_util.TensorFlowTestCase):
         encoded = string_ops.encode_base64(msg, pad=pad)
         decoded = string_ops.decode_base64(encoded)
 
-        with self.cached_session() as sess:
-          encoded_value, decoded_value = self.evaluate([encoded, decoded])
+        with self.test_session() as sess:
+          encoded_value, decoded_value = sess.run([encoded, decoded])
 
         self.assertEqual(encoded_value.shape, msg.shape)
         self.assertEqual(decoded_value.shape, msg.shape)
@@ -103,7 +102,7 @@ class Base64OpsTest(test_util.TensorFlowTestCase):
     def try_decode(enc):
       self._decoded_f.eval(feed_dict={self._encoded_f: enc})
 
-    with self.cached_session():
+    with self.test_session():
       # Invalid length.
       msg = np.random.bytes(99)
       enc = base64.urlsafe_b64encode(msg)

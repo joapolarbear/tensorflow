@@ -19,7 +19,8 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace host {
 
 using std::chrono::duration_cast;
@@ -45,4 +46,5 @@ void HostTimer::StartNow() { start_time_ = clock::now(); }
 void HostTimer::StopNow() { duration_ = clock::now() - start_time_; }
 
 }  // namespace host
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

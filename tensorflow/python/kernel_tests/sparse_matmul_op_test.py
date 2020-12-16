@@ -22,7 +22,6 @@ import numpy as np
 
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import test_util
 from tensorflow.python.ops import gradient_checker
 from tensorflow.python.ops import math_ops
 from tensorflow.python.platform import test
@@ -49,7 +48,7 @@ class SparseMatMulTest(test.TestCase):
                      sp_b=False,
                      x_dtype=dtypes.float32,
                      y_dtype=dtypes.float32):
-    with self.cached_session(use_gpu=False):
+    with self.test_session(use_gpu=False):
       tf_x = math_ops.cast(x, x_dtype)
       tf_y = math_ops.cast(y, y_dtype)
       tf_ans = math_ops.matmul(
@@ -59,7 +58,7 @@ class SparseMatMulTest(test.TestCase):
           transpose_b=tr_b,
           a_is_sparse=sp_a,
           b_is_sparse=sp_b)
-      out = self.evaluate(tf_ans)
+      out = tf_ans.eval()
       np_x = math_ops.cast(tf_x, dtypes.float32).eval()
       np_y = math_ops.cast(tf_y, dtypes.float32).eval()
 
@@ -70,9 +69,8 @@ class SparseMatMulTest(test.TestCase):
 
     np_ans = np.matrix(np_x) * np.matrix(np_y)
     self.assertShapeEqual(np_ans, tf_ans)
-    self.assertAllCloseAccordingToType(np_ans, out, rtol=1e-4, atol=1e-4)
+    self.assertAllClose(np_ans, out, rtol=1e-4, atol=1e-4)
 
-  @test_util.run_deprecated_v1
   def testBasic(self):
     x = np.arange(0., 4.).reshape([4, 1]).astype(np.float32)
     y = np.arange(-1., 1.).reshape([1, 2]).astype(np.float32)
@@ -80,7 +78,6 @@ class SparseMatMulTest(test.TestCase):
       for y_dtype in (dtypes.float32, dtypes.bfloat16):
         self._testCpuMatmul(x, y, x_dtype=x_dtype, y_dtype=y_dtype)
 
-  @test_util.run_deprecated_v1
   def testZeroDim(self):
     x = np.ones((4, 0)).astype(np.float32)
     y = np.ones((0, 3)).astype(np.float32)
@@ -88,7 +85,6 @@ class SparseMatMulTest(test.TestCase):
       for y_dtype in (dtypes.float32, dtypes.bfloat16):
         self._testCpuMatmul(x, y, x_dtype=x_dtype, y_dtype=y_dtype)
 
-  @test_util.run_deprecated_v1
   def testEmpty(self):
     x = np.ones((0, 0)).astype(np.float32)
     y = np.ones((0, 0)).astype(np.float32)
@@ -97,7 +93,6 @@ class SparseMatMulTest(test.TestCase):
         self._testCpuMatmul(x, y, x_dtype=x_dtype, y_dtype=y_dtype)
 
   # Tests setting one dimension to be a high value.
-  @test_util.run_deprecated_v1
   def testLarge(self):
     r1 = np.random.randint(6000, 20000)
     r2 = np.random.randint(1, 10)
@@ -110,7 +105,6 @@ class SparseMatMulTest(test.TestCase):
           self._testCpuMatmul(x, y, x_dtype=x_dtype, y_dtype=y_dtype)
 
   # Tests random sized matrices.
-  @test_util.run_deprecated_v1
   def testRandom(self):
     for tr_a in [True, False]:
       for tr_b in [True, False]:
@@ -134,9 +128,8 @@ class SparseMatMulTest(test.TestCase):
 
 class MatMulGradientTest(test.TestCase):
 
-  def _testGradients(self, tr_a, tr_b, sp_a, sp_b, a_dtype, b_dtype, delta,
-                     name):
-    with self.cached_session():
+  def _testGradients(self, tr_a, tr_b, sp_a, sp_b, a_dtype, b_dtype, name):
+    with self.test_session():
       a = constant_op.constant(
           RandMatrix(
               3, 2, tr_a, round_bfloat=True), dtype=dtypes.float32)
@@ -158,14 +151,13 @@ class MatMulGradientTest(test.TestCase):
           a, [2, 3] if tr_a else [3, 2],
           m, [3, 4],
           x_init_value=a.eval(),
-          delta=delta) + gradient_checker.compute_gradient_error(
+          delta=1 / 64.) + gradient_checker.compute_gradient_error(
               b, [4, 2] if tr_b else [2, 4],
               m, [3, 4],
               x_init_value=b.eval(),
-              delta=delta))
-    self.assertLessEqual(err, delta / 2.)
+              delta=1 / 64.))
+    self.assertLess(err, 1 / 128.)
 
-  @test_util.run_deprecated_v1
   def testGradientInput(self):
     for tr_a in [True, False]:
       for tr_b in [True, False]:
@@ -173,15 +165,9 @@ class MatMulGradientTest(test.TestCase):
           for sp_b in [True, False]:
             for a_dtype in (dtypes.float32, dtypes.bfloat16):
               for b_dtype in (dtypes.float32, dtypes.bfloat16):
-                # Note: bfloat16 only has 7 mantissa bits, versus float32 with
-                # 10. Hence, we shift by 2 bits to pass the test.
-                if a_dtype == dtypes.bfloat16 and b_dtype == dtypes.bfloat16:
-                  delta = 1 / 16.
-                else:
-                  delta = 1 / 64.
                 name = "sparse_matmul_%s_%s_%s_%s" % (tr_a, tr_b, sp_a, sp_b)
                 self._testGradients(tr_a, tr_b, sp_a, sp_b, a_dtype, b_dtype,
-                                    delta, name)
+                                    name)
 
 
 if __name__ == "__main__":

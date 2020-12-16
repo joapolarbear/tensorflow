@@ -29,7 +29,6 @@ from tensorflow.python.ops import check_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
 from tensorflow.python.ops.distributions import distribution
-from tensorflow.python.util import deprecation
 
 __all__ = [
     "Cauchy",
@@ -63,8 +62,7 @@ class Cauchy(distribution.Distribution):
   Examples of initialization of one or a batch of distributions.
 
   ```python
-  import tensorflow_probability as tfp
-  tfd = tfp.distributions
+  tfd = tf.contrib.distributions
 
   # Define a single scalar Cauchy distribution.
   dist = tfd.Cauchy(loc=0., scale=3.)
@@ -94,14 +92,6 @@ class Cauchy(distribution.Distribution):
 
   """
 
-  @deprecation.deprecated(
-      "2018-10-01",
-      "The TensorFlow Distributions library has moved to "
-      "TensorFlow Probability "
-      "(https://github.com/tensorflow/probability). You "
-      "should update all references to use `tfp.distributions` "
-      "instead of `tf.contrib.distributions`.",
-      warn_once=True)
   def __init__(self,
                loc,
                scale,
@@ -130,8 +120,8 @@ class Cauchy(distribution.Distribution):
     Raises:
       TypeError: if `loc` and `scale` have different `dtype`.
     """
-    parameters = dict(locals())
-    with ops.name_scope(name, values=[loc, scale]) as name:
+    parameters = locals()
+    with ops.name_scope(name, values=[loc, scale]):
       with ops.control_dependencies([check_ops.assert_positive(scale)]
                                     if validate_args else []):
         self._loc = array_ops.identity(loc, name="loc")
@@ -173,7 +163,7 @@ class Cauchy(distribution.Distribution):
     return constant_op.constant([], dtype=dtypes.int32)
 
   def _event_shape(self):
-    return tensor_shape.TensorShape([])
+    return tensor_shape.scalar()
 
   def _sample_n(self, n, seed=None):
     shape = array_ops.concat([[n], self.batch_shape_tensor()], 0)

@@ -18,7 +18,8 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/platform.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace host {
 
 // Opaque and unique identifier for the host platform.
@@ -29,6 +30,7 @@ namespace host {
 extern const Platform::Id kHostPlatformId;
 
 }  // namespace host
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_HOST_HOST_PLATFORM_ID_H_

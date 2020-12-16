@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/core/grappler/costs/robust_stats.h"
 #include <algorithm>
 #include <cmath>
-#include <utility>
 
 namespace tensorflow {
 namespace grappler {

@@ -1,7 +1,17 @@
+licenses(["notice"])  # Apache 2.0
+
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 
-package(
-    licenses = ["notice"],  # Apache 2.0
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )
 
 cc_library(
@@ -51,11 +61,7 @@ cc_library(
     deps = [
         ":input_yielder",
         "//tensorflow/cc:cc_ops",
-        "//tensorflow/core:functional_ops_op_lib",
-        "//tensorflow/core:math_ops_op_lib",
-        "//tensorflow/core:no_op_op_lib",
         "//tensorflow/core:protos_all_cc",
-        "//tensorflow/core:sendrecv_ops_op_lib",
         "//tensorflow/core:tensorflow",
         "//tensorflow/core/grappler:grappler_item",
         "//tensorflow/core/kernels:aggregate_ops",
