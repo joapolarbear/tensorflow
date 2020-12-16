@@ -25,22 +25,24 @@ limitations under the License.
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 namespace tensorflow {
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 namespace {
 template <typename Scalar>
-se::DeviceMemory<Scalar> AsDeviceMemory(const Scalar* gpu_memory) {
-  se::DeviceMemoryBase wrapped(const_cast<Scalar*>(gpu_memory));
-  se::DeviceMemory<Scalar> typed(wrapped);
+perftools::gputools::DeviceMemory<Scalar> AsDeviceMemory(
+    const Scalar* cuda_memory) {
+  perftools::gputools::DeviceMemoryBase wrapped(
+      const_cast<Scalar*>(cuda_memory));
+  perftools::gputools::DeviceMemory<Scalar> typed(wrapped);
   return typed;
 }
 }  // namespace
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 template <class Scalar>
 class MatrixTriangularSolveOp : public LinearAlgebraOp<Scalar> {
@@ -83,7 +85,7 @@ class MatrixTriangularSolveOp : public LinearAlgebraOp<Scalar> {
     const ConstMatrixMap& rhs = inputs[1];
     MatrixMap& output = outputs->at(0);
 
-    if (matrix.rows() == 0 || rhs.rows() == 0 || rhs.cols() == 0) {
+    if (matrix.rows() == 0 || rhs.cols() == 0) {
       // To be consistent with the MatrixInverse op, we define the solution for
       // an empty set of equation as the empty matrix.
       return;
@@ -128,7 +130,7 @@ REGISTER_LINALG_OP_CPU("BatchMatrixTriangularSolve",
 REGISTER_LINALG_OP_CPU("BatchMatrixTriangularSolve",
                        (MatrixTriangularSolveOp<double>), double);
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
 
 // TODO(rmlarsen): Re-factor to
 // 1. Enable buffer forwarding from rhs->out.
@@ -202,17 +204,18 @@ class MatrixTriangularSolveOpGPU : public LinearAlgebraOp<Scalar> {
     // output' = rhs' / matrix' (' stands for transpose)
     // Upper/lower needs to be swapped for this.
 
-    se::blas::UpperLower upper_lower_matrix;
-    se::blas::Transpose transpose_matrix;
+    perftools::gputools::blas::UpperLower upper_lower_matrix;
+    perftools::gputools::blas::Transpose transpose_matrix;
     if (lower_) {
-      upper_lower_matrix = se::blas::UpperLower::kUpper;
+      upper_lower_matrix = perftools::gputools::blas::UpperLower::kUpper;
     } else {
-      upper_lower_matrix = se::blas::UpperLower::kLower;
+      upper_lower_matrix = perftools::gputools::blas::UpperLower::kLower;
     }
     if (adjoint_) {
-      transpose_matrix = se::blas::Transpose::kConjugateTranspose;
+      transpose_matrix =
+          perftools::gputools::blas::Transpose::kConjugateTranspose;
     } else {
-      transpose_matrix = se::blas::Transpose::kNoTranspose;
+      transpose_matrix = perftools::gputools::blas::Transpose::kNoTranspose;
     }
     uint64 leading_dim_matrix = matrix.cols();
     uint64 leading_dim_output = output.cols();
@@ -221,11 +224,11 @@ class MatrixTriangularSolveOpGPU : public LinearAlgebraOp<Scalar> {
     bool blas_launch_status =
         stream
             ->ThenBlasTrsm(
-                se::blas::Side::kRight /*side*/, upper_lower_matrix /*uplo*/,
-                transpose_matrix /*trans*/,
-                se::blas::Diagonal::kNonUnit /*diag*/, colmajor_rows /*m*/,
-                colmajor_cols /*n*/, Scalar(1.0) /*alpha*/, matrix_ptr,
-                leading_dim_matrix /*lda*/, &out_ptr,
+                perftools::gputools::blas::Side::kRight /*side*/,
+                upper_lower_matrix /*uplo*/, transpose_matrix /*trans*/,
+                perftools::gputools::blas::Diagonal::kNonUnit /*diag*/,
+                colmajor_rows /*m*/, colmajor_cols /*n*/, Scalar(1.0) /*alpha*/,
+                matrix_ptr, leading_dim_matrix /*lda*/, &out_ptr,
                 leading_dim_output /*ldb*/)
             .ok();
     if (!blas_launch_status) {
@@ -253,6 +256,6 @@ REGISTER_LINALG_OP_GPU("BatchMatrixTriangularSolve",
 REGISTER_LINALG_OP_GPU("BatchMatrixTriangularSolve",
                        (MatrixTriangularSolveOpGPU<double>), double);
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 }  // namespace tensorflow

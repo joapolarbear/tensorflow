@@ -29,7 +29,8 @@ namespace checkpoint {
 
 class TensorSliceReader;
 
-CheckpointReader::CheckpointReader(const string& filename, TF_Status* status)
+CheckpointReader::CheckpointReader(const string& filename,
+                                   TF_Status* out_status)
     : reader_(nullptr),
       v2_reader_(nullptr),
       var_to_shape_map_(nullptr),
@@ -42,7 +43,7 @@ CheckpointReader::CheckpointReader(const string& filename, TF_Status* status)
     v2_reader_.reset(
         new BundleReader(Env::Default(), filename /* prefix to a V2 ckpt */));
     if (!v2_reader_->status().ok()) {
-      Set_TF_Status_from_Status(status, v2_reader_->status());
+      Set_TF_Status_from_Status(out_status, v2_reader_->status());
       return;
     }
     auto result = BuildV2VarMaps();
@@ -51,7 +52,7 @@ CheckpointReader::CheckpointReader(const string& filename, TF_Status* status)
   } else {
     reader_.reset(new TensorSliceReader(filename));
     if (!reader_->status().ok()) {
-      Set_TF_Status_from_Status(status, reader_->status());
+      Set_TF_Status_from_Status(out_status, reader_->status());
       return;
     }
     var_to_shape_map_.reset(
@@ -124,7 +125,7 @@ CheckpointReader::BuildV2VarMaps() {
       const auto& slice_proto = entry.slices(i);
       CHECK(filtered_keys
                 .insert(EncodeTensorNameSlice(
-                    string(v2_reader_->key()) /* full var's name */,
+                    v2_reader_->key().ToString() /* full var's name */,
                     TensorSlice(slice_proto)))
                 .second);
     }
@@ -137,11 +138,11 @@ CheckpointReader::BuildV2VarMaps() {
       new TensorSliceReader::VarToDataTypeMap);
   v2_reader_->Seek(kHeaderEntryKey);
   for (v2_reader_->Next(); v2_reader_->Valid(); v2_reader_->Next()) {
-    if (filtered_keys.count(string(v2_reader_->key())) > 0) continue;
+    if (filtered_keys.count(v2_reader_->key().ToString()) > 0) continue;
     CHECK(entry.ParseFromArray(v2_reader_->value().data(),
                                v2_reader_->value().size()))
         << entry.InitializationErrorString();
-    string key(v2_reader_->key());
+    string key = v2_reader_->key().ToString();
     (*var_to_shape_map)[key] = TensorShape(entry.shape());
     (*var_to_data_type_map)[key] = DataType(entry.dtype());
   }

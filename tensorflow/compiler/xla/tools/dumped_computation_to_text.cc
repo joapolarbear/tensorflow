@@ -17,15 +17,17 @@ limitations under the License.
 #include <memory>
 #include <string>
 
-#include "absl/types/span.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
+#include "tensorflow/compiler/xla/client/computation.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
-#include "tensorflow/compiler/xla/service/hlo.pb.h"
+#include "tensorflow/compiler/xla/service/computation_tracker.h"
 #include "tensorflow/compiler/xla/service/service.h"
+#include "tensorflow/compiler/xla/service/session.pb.h"
 #include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/compiler/xla/types.h"
+#include "tensorflow/compiler/xla/xla_data.pb.h"
+#include "tensorflow/core/lib/gtl/array_slice.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/platform/logging.h"
@@ -33,21 +35,21 @@ limitations under the License.
 namespace xla {
 namespace tools {
 
-void RealMain(absl::Span<char* const> args, bool compile) {
+void RealMain(tensorflow::gtl::ArraySlice<char*> args, bool compile) {
   LocalClient* client = ClientLibrary::LocalClientOrDie();
   LocalService* local_service =
       ClientLibrary::GetXlaService(client->platform());
   for (char* arg : args) {
-    HloSnapshot snapshot;
+    SessionModule session_module;
     TF_CHECK_OK(tensorflow::ReadBinaryProto(tensorflow::Env::Default(), arg,
-                                            &snapshot));
-    auto computation_status = client->LoadSnapshot(snapshot);
+                                            &session_module));
+    auto computation_status = client->LoadSnapshot(session_module);
     if (!computation_status.ok()) {
       fprintf(stderr, "could not load snapshot for %s: %s\n", arg,
               computation_status.status().ToString().c_str());
       continue;
     }
-    XlaComputation computation = computation_status.ConsumeValueOrDie();
+    Computation computation = computation_status.ConsumeValueOrDie();
 
     if (compile) {
       std::unique_ptr<ProgramShape> program_shape =
@@ -58,28 +60,27 @@ void RealMain(absl::Span<char* const> args, bool compile) {
       for (int i = 0; i < program_shape->parameters_size(); ++i) {
         layouts.push_back(&program_shape->parameters(i));
       }
-
-      ExecutableBuildOptions build_options;
-      build_options.set_device_ordinal(0);
-      build_options.set_result_layout(program_shape->result());
       StatusOr<std::unique_ptr<Executable>> executable =
-          local_service->CompileExecutable(computation, layouts, build_options);
+          local_service->CompileExecutable(computation.handle(), layouts,
+                                           &program_shape->result(),
+                                           /*device_ordinal=*/0);
 
       const HloModule& module = executable.ValueOrDie()->module();
 
       fprintf(stdout, "HLO compiled for %s backend:\n%s\n",
               local_service->backend().platform()->Name().c_str(),
-              module.ToString(HloPrintOptions::ShortParsable()).c_str());
+              module.ToString().c_str());
     } else {
-      auto config = HloModule::CreateModuleConfigFromProto(computation.proto(),
-                                                           DebugOptions())
-                        .ConsumeValueOrDie();
+      const ComputationTracker& tracker = local_service->computation_tracker();
+      UserComputation* user_computation =
+          tracker.Resolve(computation.handle()).ConsumeValueOrDie();
+      VersionedComputationHandle versioned_handle =
+          user_computation->GetVersionedHandle();
       std::unique_ptr<HloModule> module =
-          HloModule::CreateFromProto(computation.proto(), config)
+          tracker.BuildHloModule(versioned_handle, HloModuleConfig())
               .ConsumeValueOrDie();
 
-      fprintf(stdout, "%s\n",
-              module->ToString(HloPrintOptions::ShortParsable()).c_str());
+      fprintf(stdout, "%s\n", module->ToString().c_str());
     }
   }
 }
@@ -101,8 +102,8 @@ int main(int argc, char** argv) {
   tensorflow::port::InitMain(usage.c_str(), &argc, &argv);
   QCHECK(argc > 1) << "\nERROR: must specify at least one module\n" << usage;
 
-  absl::Span<char* const> args(argv, argc);
-  args.remove_prefix(1);  // Pop off the binary name, argv[0]
+  tensorflow::gtl::ArraySlice<char*> args(argv, argc);
+  args.pop_front();  // Pop off the binary name, argv[0]
   xla::tools::RealMain(args, compile);
   return 0;
 }

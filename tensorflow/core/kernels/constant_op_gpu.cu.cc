@@ -13,8 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
@@ -78,6 +77,7 @@ struct FillFunctor<GPUDevice, T> {
 
 #define DEFINE_FILL_GPU(T) template struct FillFunctor<GPUDevice, T>;
 TF_CALL_REAL_NUMBER_TYPES(DEFINE_FILL_GPU);
+TF_CALL_bfloat16(DEFINE_FILL_GPU);
 TF_CALL_bool(DEFINE_FILL_GPU);
 #undef DEFINE_FILL_GPU
 
@@ -91,6 +91,7 @@ struct SetZeroFunctor<GPUDevice, T> {
 
 #define DEFINE_SETZERO_GPU(T) template struct SetZeroFunctor<GPUDevice, T>;
 TF_CALL_NUMBER_TYPES(DEFINE_SETZERO_GPU);
+TF_CALL_bfloat16(DEFINE_SETZERO_GPU);
 TF_CALL_bool(DEFINE_SETZERO_GPU);
 #undef DEFINE_SETZERO_GPU
 
@@ -104,10 +105,11 @@ struct SetOneFunctor<GPUDevice, T> {
 
 #define DEFINE_SETONE_GPU(T) template struct SetOneFunctor<GPUDevice, T>;
 TF_CALL_NUMBER_TYPES(DEFINE_SETONE_GPU);
+TF_CALL_bfloat16(DEFINE_SETONE_GPU);
 TF_CALL_bool(DEFINE_SETONE_GPU);
 #undef DEFINE_SETONE_GPU
 
 }  // end namespace functor
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

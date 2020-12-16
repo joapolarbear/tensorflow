@@ -50,18 +50,17 @@ class ParallelConcatRemovePass : public GraphOptimizationPass {
     }
     for (Node* n : matches) {
       AttrSlice n_attrs = n->attrs();
-      auto base_make_node = [n, &n_attrs](const string& op,
-                                          const string& name) {
-        NodeDebugInfo debug_info(*n);
-        NodeBuilder node_builder(name, op, OpRegistry::Global(), &debug_info);
+      auto base_make_node = [n, g, &n_attrs](const string& op,
+                                             const string& name) {
+        NodeBuilder node_builder(name, op);
         node_builder.Device(n->requested_device());
-        const string& colo = GetNodeAttrString(n_attrs, "_class");
-        if (!colo.empty()) {
+        string colo;
+        if (GetNodeAttr(n_attrs, "_class", &colo).ok()) {
           node_builder.Attr("_class", colo);
         }
         return node_builder;
       };
-      auto make_node = [n, g, &base_make_node](string op) {
+      auto make_node = [n, g, &n_attrs, &base_make_node](string op) {
         return base_make_node(
             op, g->NewName(strings::StrCat(n->name(), "/Internal")));
       };
@@ -79,6 +78,7 @@ class ParallelConcatRemovePass : public GraphOptimizationPass {
 
       // Add all the inplace_updates.
       std::vector<Node*> control_nodes;
+      int64 i = 0;
       for (const Edge* input_edge : n->in_edges()) {
         if (input_edge->IsControlEdge()) {
           g->AddControlEdge(input_edge->src(), start);
@@ -88,11 +88,13 @@ class ParallelConcatRemovePass : public GraphOptimizationPass {
         Node* update;
         TF_RETURN_IF_ERROR(
             make_node("_ParallelConcatUpdate")
-                .Attr("loc", input_edge->dst_input())
+                .Attr("loc", i)
                 .Input(start)
                 .Input(input_edge->src(), input_edge->src_output())
                 .Finalize(g, &update));
         control_nodes.push_back(update);
+
+        ++i;
       }
 
       // Add the final identity.

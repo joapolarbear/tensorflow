@@ -1,6 +1,6 @@
 licenses(["notice"])  # 3-clause BSD.
 
-py_library(
+py_binary(
     name = "spinn",
     srcs = ["spinn.py"],
     srcs_version = "PY2AND3",

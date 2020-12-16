@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CC_FRAMEWORK_SCOPE_H_
-#define TENSORFLOW_CC_FRAMEWORK_SCOPE_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_H_
+#define THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_H_
 
 #include <memory>
 #include <string>
@@ -22,9 +22,7 @@ limitations under the License.
 #include <unordered_set>
 #include <vector>
 
-#include "absl/strings/str_cat.h"
 #include "tensorflow/cc/framework/ops.h"
-#include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
 
@@ -71,9 +69,8 @@ struct CompositeOpScopes;
 ///     // W will be named "linear/W"
 ///     auto W = Variable(linear.WithOpName("W"),
 ///                       {2, 2}, DT_FLOAT);
-///     // b will be named "linear/b_3"
-///     int idx = 3;
-///     auto b = Variable(linear.WithOpName("b_", idx),
+///     // b will be named "linear/b"
+///     auto b = Variable(linear.WithOpName("b"),
 ///                       {2}, DT_FLOAT);
 ///     auto x = Const(linear, {...});  // name: "linear/Const"
 ///     auto m = MatMul(linear, x, W);  // name: "linear/MatMul"
@@ -116,11 +113,8 @@ class Scope {
   Scope NewSubScope(const string& child_scope_name) const;
 
   /// Return a new scope. All ops created within the returned scope will have
-  /// names of the form `name/StrCat(fragments...)[_suffix]`
-  template <typename... Ty>
-  Scope WithOpName(Ty... fragments) const {
-    return WithOpNameImpl(absl::StrCat(fragments...));
-  }
+  /// names of the form `name/op_name[_suffix]`.
+  Scope WithOpName(const string& op_name) const;
 
   /// Return a new scope. All ops created within the returned scope will have as
   /// control dependencies the union of operations in the control_deps vector
@@ -138,14 +132,6 @@ class Scope {
   /// Return a new scope. All ops created within the returned scope will have
   /// the device field set to 'device'.
   Scope WithDevice(const string& device) const;
-
-  /// Returns a new scope.  All ops created within the returned scope will have
-  /// their assigned device set to `assigned_device`.
-  Scope WithAssignedDevice(const string& assigned_device) const;
-
-  /// Returns a new scope.  All ops created within the returned scope will have
-  /// their _XlaCluster attribute set to `xla_cluster`.
-  Scope WithXlaCluster(const string& xla_cluster) const;
 
   /// Return a new scope. All ops created within the returned scope will be
   /// co-located on the device where op is placed.
@@ -177,7 +163,7 @@ class Scope {
   /// Note: The status object is shared between all children of this scope.
   /// If the resulting status is not Status::OK() and exit_on_error_ is set on
   /// this scope, this function exits by calling LOG(FATAL).
-  void UpdateStatus(const Status& s) const;
+  void UpdateStatus(const Status s) const;
 
   // START_SKIP_DOXYGEN
 
@@ -206,15 +192,14 @@ class Scope {
 
   // START_SKIP_DOXYGEN
 
-  /// If status() is Status::OK(), construct a Graph object using `opts` as the
+  /// If status() is Status::OK(), construct a Graph object using the default
   /// GraphConstructorOptions, and return Status::OK if graph construction was
   /// successful. Otherwise, return the error status.
   // TODO(josh11b, keveman): Make this faster; right now it converts
   // Graph->GraphDef->Graph.  This cleans up the graph (e.g. adds
   // edges from the source and to the sink node, resolves back edges
   // by name), and makes sure the resulting graph is valid.
-  Status ToGraph(
-      Graph* g, GraphConstructorOptions opts = GraphConstructorOptions{}) const;
+  Status ToGraph(Graph* g) const;
 
   // Calls AddNode() using this scope's ShapeRefiner. This exists in the public
   // API to prevent custom op wrappers from needing access to shape_refiner.h or
@@ -238,8 +223,6 @@ class Scope {
   // END_SKIP_DOXYGEN
 
  private:
-  Scope WithOpNameImpl(const string& op_name) const;
-
   friend class InternalScope;
   std::unique_ptr<Impl> impl_;
   explicit Scope(Impl*);
@@ -255,14 +238,8 @@ struct CompositeOpScopes {
   Scope last;
 };
 
-// Creates a node of the given operation, with the given inputs, and assigns the
-// result to output. This does not support the ability to add additional
-// attributes.
-Status CreateOutputWithScope(string op_name,
-                             absl::Span<const ::tensorflow::Input> inputs,
-                             const Scope& scope, Output* output);
 /// @}
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CC_FRAMEWORK_SCOPE_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_H_

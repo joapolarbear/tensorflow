@@ -15,7 +15,6 @@
 #include "tensorflow/contrib/tensor_forest/kernels/v4/params.h"
 #include <math.h>
 #include <stdlib.h>
-#include <cmath>
 #include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
@@ -36,8 +35,8 @@ float ResolveParam(const DepthDependentParam& param, int32 depth) {
       return param.exponential().bias() +
              param.exponential().multiplier() *
                  static_cast<float>(
-                     std::pow(param.exponential().base(),
-                              param.exponential().depth_multiplier() * depth));
+                     pow(param.exponential().base(),
+                         param.exponential().depth_multiplier() * depth));
 
     case DepthDependentParam::kThreshold:
       if (depth >= param.threshold().threshold()) {

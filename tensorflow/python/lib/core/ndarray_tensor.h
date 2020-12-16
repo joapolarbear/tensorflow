@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_
-#define TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_
+#ifndef THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_
+#define THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_
 
 // Must be included first.
 #include "tensorflow/python/lib/core/numpy.h"
@@ -25,9 +25,6 @@ limitations under the License.
 #include "tensorflow/python/lib/core/safe_ptr.h"
 
 namespace tensorflow {
-
-Status TF_TensorToMaybeAliasedPyArray(Safe_TF_TensorPtr tensor,
-                                      PyObject** out_ndarray);
 
 Status TF_TensorToPyArray(Safe_TF_TensorPtr tensor, PyObject** out_ndarray);
 
@@ -48,4 +45,4 @@ Status TensorToNdarray(const Tensor& t, PyObject** ret);
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_
+#endif  // THIRD_PARTY_TENSORFLOW_PYTHON_LIB_CORE_NDARRAY_TENSOR_H_

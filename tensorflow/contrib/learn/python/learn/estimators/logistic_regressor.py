@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Logistic regression (aka binary classifier) class (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
+"""Logistic regression (aka binary classifier) class.
 
 This defines some useful basic metrics for using logistic regression to classify
 a binary event (0 vs 1).
@@ -31,7 +27,6 @@ from tensorflow.contrib.learn.python.learn.estimators import constants
 from tensorflow.contrib.learn.python.learn.estimators import estimator
 from tensorflow.contrib.learn.python.learn.estimators import metric_key
 from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
-from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import math_ops
 
 
@@ -79,10 +74,6 @@ def LogisticRegressor(  # pylint: disable=invalid-name
     model_fn, thresholds=None, model_dir=None, config=None,
     feature_engineering_fn=None):
   """Builds a logistic regression Estimator for binary classification.
-
-  THIS CLASS IS DEPRECATED. See
-  [contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-  for general migration instructions.
 
   This method provides a basic Estimator with some additional metrics for custom
   binary classification models, including AUC, precision/recall and accuracy.
@@ -161,9 +152,8 @@ def _make_logistic_eval_metric_ops(labels, predictions, thresholds):
       labels=labels_tensor, predictions=predictions)
 
   for threshold in thresholds:
-    predictions_at_threshold = math_ops.cast(
+    predictions_at_threshold = math_ops.to_float(
         math_ops.greater_equal(predictions, threshold),
-        dtypes.float32,
         name='predictions_at_threshold_%f' % threshold)
     metrics[metric_key.MetricKey.ACCURACY_MEAN % threshold] = (
         metrics_lib.streaming_accuracy(labels=labels_tensor,

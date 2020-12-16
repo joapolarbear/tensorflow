@@ -116,7 +116,6 @@ def sdca_model_fn(features, labels, mode, params, config=None):
   num_loss_partitions = params["num_loss_partitions"]
   weight_column_name = params["weight_column_name"]
   update_weights_hook = params.get("update_weights_hook", None)
-  partitioner = params["partitioner"]
 
   loss_type = None
   if isinstance(head, head_lib._BinarySvmHead):  # pylint: disable=protected-access
@@ -137,14 +136,12 @@ def sdca_model_fn(features, labels, mode, params, config=None):
       example_id_column=example_id_column,
       num_loss_partitions=n_loss_partitions,
       symmetric_l1_regularization=l1_regularization,
-      symmetric_l2_regularization=l2_regularization,
-      partitioner=partitioner)
+      symmetric_l2_regularization=l2_regularization)
 
   parent_scope = "linear"
 
-  with variable_scope.variable_scope(
-      values=features.values(), name_or_scope=parent_scope,
-      partitioner=partitioner) as scope:
+  with variable_scope.variable_op_scope(features.values(),
+                                        parent_scope) as scope:
     features = features.copy()
     features.update(layers.transform_features(features, feature_columns))
     logits, columns_to_variables, bias = (
@@ -216,8 +213,7 @@ class _SDCAEstimator(estimator.Estimator):
                l2_regularization=1.0,
                num_loss_partitions=None,
                config=None,
-               feature_engineering_fn=None,
-               partitioner=None):
+               feature_engineering_fn=None):
     """Construct a `_SDCAEstimator` estimator object.
 
     Args:
@@ -245,8 +241,6 @@ class _SDCAEstimator(estimator.Estimator):
       feature_engineering_fn: Feature engineering function. Takes features and
         labels which are the output of `input_fn` and returns features and
         labels which will be fed into the model.
-      partitioner: Variable partitioner for the primal weights (`div`
-        partitioning strategy will be used).
 
     Returns:
       A `_SDCAEstimator` estimator.
@@ -273,7 +267,6 @@ class _SDCAEstimator(estimator.Estimator):
         "l2_regularization": l2_regularization,
         "weight_column_name": weight_column_name,
         "update_weights_hook": _SdcaUpdateWeightsHook(),
-        "partitioner": partitioner,
     }
 
     super(_SDCAEstimator, self).__init__(
@@ -343,8 +336,7 @@ class SDCALogisticClassifier(_SDCAEstimator):
                l2_regularization=1.0,
                num_loss_partitions=None,
                config=None,
-               feature_engineering_fn=None,
-               partitioner=None):
+               feature_engineering_fn=None):
     """Construct a `SDCALogisticClassifier` object.
 
     Args:
@@ -369,8 +361,6 @@ class SDCALogisticClassifier(_SDCAEstimator):
       feature_engineering_fn: Feature engineering function. Takes features and
         labels which are the output of `input_fn` and returns features and
         labels which will be fed into the model.
-      partitioner: Variable partitioner for the primal weights (`div`
-        partitioning strategy will be used).
 
     Returns:
       A `SDCALogisiticClassifier` estimator.
@@ -386,8 +376,7 @@ class SDCALogisticClassifier(_SDCAEstimator):
         l2_regularization=l2_regularization,
         num_loss_partitions=num_loss_partitions,
         config=config,
-        feature_engineering_fn=None,
-        partitioner=partitioner)
+        feature_engineering_fn=None)
 
   def predict_classes(self, input_fn=None):
     """Runs inference to determine the predicted class.
@@ -474,8 +463,7 @@ class SDCALinearRegressor(_SDCAEstimator):
                l2_regularization=1.0,
                num_loss_partitions=None,
                config=None,
-               feature_engineering_fn=None,
-               partitioner=None):
+               feature_engineering_fn=None):
     """Construct a `SDCALinearRegressor` estimator object.
 
 
@@ -501,8 +489,6 @@ class SDCALinearRegressor(_SDCAEstimator):
       feature_engineering_fn: Feature engineering function. Takes features and
         labels which are the output of `input_fn` and returns features and
         labels which will be fed into the model.
-      partitioner: Variable partitioner for the primal weights (`div`
-        partitioning strategy will be used).
 
     Returns:
       A `SDCALinearRegressor` estimator.
@@ -517,8 +503,7 @@ class SDCALinearRegressor(_SDCAEstimator):
         l2_regularization=l2_regularization,
         num_loss_partitions=num_loss_partitions,
         config=config,
-        feature_engineering_fn=None,
-        partitioner=partitioner)
+        feature_engineering_fn=None)
 
   def predict_scores(self, input_fn):
     """Returns predicted scores for given features.

@@ -17,13 +17,11 @@ limitations under the License.
 
 #include "tensorflow/core/common_runtime/kernel_benchmark_testlib.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/lib/math/math_util.h"
 #include "tensorflow/core/lib/random/philox_random.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/platform/test_benchmark.h"
 
 namespace tensorflow {
-namespace {
 
 Tensor VecShape(int64 v) {
   if (v >= std::numeric_limits<int32>::max()) {
@@ -59,7 +57,7 @@ Graph* TruncatedNormal(int64 n) {
 }
 
 #define BM_RNG(DEVICE, RNG)                                   \
-  void BM_##DEVICE##_##RNG(int iters, int arg) {              \
+  static void BM_##DEVICE##_##RNG(int iters, int arg) {       \
     testing::ItemsProcessed(static_cast<int64>(iters) * arg); \
     test::Benchmark(#DEVICE, RNG(arg)).Run(iters);            \
   }                                                           \
@@ -78,13 +76,12 @@ Tensor VecAlphas(int64 n) {
   for (int i = 0; i < n; i++) {
     // Alternate back and forth between small-and-growing (.25) and
     // large-and-shrinking (26.67) alpha.
-    alphas.vec<double>()(i) =
-        0.25 + MathUtil::IPow(1.1, i % 2 == 0 ? i : n - i);
+    alphas.vec<double>()(i) = 0.25 + std::pow(1.1, i % 2 == 0 ? i : n - i);
   }
   return alphas;
 }
 
-void BM_cpu_RandomGamma(int iters, int nsamp, int nalpha) {
+static void BM_cpu_RandomGamma(int iters, int nsamp, int nalpha) {
   testing::ItemsProcessed(static_cast<int64>(iters) * nsamp * nalpha);
   Graph* g = new Graph(OpRegistry::Global());
   test::graph::RandomGamma(g, test::graph::Constant(g, VecShape(nsamp)),
@@ -93,7 +90,7 @@ void BM_cpu_RandomGamma(int iters, int nsamp, int nalpha) {
 }
 BENCHMARK(BM_cpu_RandomGamma)->RangePair(1 << 14, 4 << 15, 2, 50);
 
-void BM_PhiloxRandom(int iters) {
+static void BM_PhiloxRandom(int iters) {
   // Fill 2M random numbers
   int count = 2 << 20;
 
@@ -117,7 +114,7 @@ void BM_PhiloxRandom(int iters) {
 }
 BENCHMARK(BM_PhiloxRandom);
 
-void BM_StdMTRandom(int iters) {
+static void BM_StdMTRandom(int iters) {
   // Fill 2M random numbers
   int count = 2 << 20;
 
@@ -141,5 +138,4 @@ void BM_StdMTRandom(int iters) {
 }
 BENCHMARK(BM_StdMTRandom);
 
-}  // namespace
-}  // namespace tensorflow
+}  // end namespace tensorflow

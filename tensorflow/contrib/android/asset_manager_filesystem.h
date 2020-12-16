@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_
-#define TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_
+#define THIRD_PARTY_TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -66,9 +66,6 @@ class AssetManagerFileSystem : public FileSystem {
   Status DeleteDir(const string& d) override;
   Status RenameFile(const string& s, const string& t) override;
 
-  Status GetMatchingPaths(const string& pattern,
-                          std::vector<string>* results) override;
-
  private:
   string RemoveAssetPrefix(const string& name);
 
@@ -82,4 +79,4 @@ class AssetManagerFileSystem : public FileSystem {
 };
 
 }  // namespace tensorflow
-#endif  // TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CONTRIB_ANDROID_ASSET_MANAGER_FILESYSTEM_H_

@@ -25,11 +25,11 @@ namespace xla {
 
 // A pass which replaces all fusion instructions with the equivalent un-fused
 // instructions.
-class Defuser : public HloModulePass {
+class Defuser : public HloPassInterface {
  public:
   Defuser() {}
   ~Defuser() override {}
-  absl::string_view name() const override { return "defuser"; }
+  tensorflow::StringPiece name() const override { return "defuser"; }
 
   // Run defusion on the given module. Returns whether the module was
   // changed.

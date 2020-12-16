@@ -18,7 +18,6 @@ limitations under the License.
 
 #include "tensorflow/core/grappler/costs/cost_estimator.h"
 #include "tensorflow/core/grappler/costs/op_level_cost_estimator.h"
-#include "tensorflow/core/grappler/costs/virtual_scheduler.h"
 #include "tensorflow/core/grappler/grappler_item.h"
 #include "tensorflow/core/lib/core/status.h"
 
@@ -34,46 +33,33 @@ class Cluster;
 struct GrapplerItem;
 
 // Estimate the cost of running a Grappler item based on the theoretical
-// performance of the hardware that will run the model. Note that this
-// internally uses static shape inference. An option for aggressive shape
-// inference is provided to minimize unknown shapes, and this is only applicable
-// with static shape inference.
+// performance of the hardware that will run the model.
 class AnalyticalCostEstimator : public CostEstimator {
  public:
-  AnalyticalCostEstimator(Cluster* cluster, bool use_static_shapes,
-                          bool use_aggressive_shape_inference);
+  // Does not take ownership of cluster.
+  AnalyticalCostEstimator(Cluster* cluster, bool use_static_shapes);
+  // Does not take ownership of the cluster, but takes ownership of the
+  // node_estimator
   AnalyticalCostEstimator(Cluster* cluster,
-                          std::unique_ptr<OpLevelCostEstimator> node_estimator,
-                          std::unique_ptr<ReadyNodeManager> node_manager,
-                          bool use_static_shapes,
-                          bool use_aggressive_shape_inference);
-  AnalyticalCostEstimator(Cluster* cluster,
-                          std::unique_ptr<OpLevelCostEstimator> node_estimator,
-                          std::unique_ptr<ReadyNodeManager> node_manager,
-                          std::unique_ptr<VirtualPlacer> placer,
-                          bool use_static_shapes,
-                          bool use_aggressive_shape_inference);
+                          OpLevelCostEstimator* node_estimator,
+                          bool use_static_shapes);
   ~AnalyticalCostEstimator() override {}
 
+  // Initializes the estimator for the specified grappler item.
   // This implementation always returns OK.
   Status Initialize(const GrapplerItem& item) override;
 
   // Predict the performance of each node of the optimized graph and annotate
-  // the RunMetadata with the corresponding estimates. Also returns the
-  // expected cost for the whole graph.
-  Status PredictCosts(const GraphDef& optimized_graph,
-                      RunMetadata* run_metadata, Costs* cost) const override;
-
-  const VirtualScheduler* GetScheduler() const { return scheduler_.get(); }
+  // the CostGraphDef with the corresponding estimates. Also returns the
+  // expected latency for the whole graph.
+  Status PredictCosts(const GraphDef& optimized_graph, CostGraphDef* cost_graph,
+                      Costs* overall_latency) const override;
 
  private:
-  const GrapplerItem* item_;
+  Cluster* cluster_;  // Not owned.
+  GrapplerItem item_;
   std::unique_ptr<OpLevelCostEstimator> node_estimator_;
-  std::unique_ptr<ReadyNodeManager> node_manager_;
-  std::unique_ptr<VirtualScheduler> scheduler_;
-
   bool use_static_shapes_;
-  bool use_aggressive_shape_inference_;
 };
 
 }  // end namespace grappler

@@ -22,7 +22,8 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/platform/port.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 class Stream;
 template <typename ElemT>
@@ -88,6 +89,7 @@ class RngSupport {
 };
 
 }  // namespace rng
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_RNG_H_

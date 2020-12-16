@@ -27,13 +27,11 @@ echo ""
 
 # Run configure.
 export TF_NEED_CUDA=0
-export CC_OPT_FLAGS='-mavx'
 export PYTHON_BIN_PATH=$(which python2)
 yes "" | $PYTHON_BIN_PATH configure.py
 which bazel
-# TODO(b/122370901): Fix nomac, no_mac inconsistency.
-bazel test --test_tag_filters=-no_oss,-gpu,-benchmark-test,-nomac,-no_mac \
+bazel test --test_tag_filters=-no_oss,-gpu,-benchmark-test,-nomac \
     --test_timeout 300,450,1200,3600 \
-    --test_size_filters=small,medium --config=opt \
+    --test_size_filters=small,medium \
     --jobs=${N_JOBS} --build_tests_only --test_output=errors -k -- \
-    //tensorflow/contrib/... -//tensorflow/lite/...
+    //tensorflow/contrib/... -//tensorflow/contrib/lite/...

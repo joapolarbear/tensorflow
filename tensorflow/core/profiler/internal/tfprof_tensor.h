@@ -19,8 +19,8 @@ limitations under the License.
 //    is not supported by TensorFlow CheckPointReader library, though it is
 //    supported in current code.
 
-#ifndef TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_
-#define TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_
+#define THIRD_PARTY_TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_
 
 #include <typeinfo>
 
@@ -173,4 +173,4 @@ class TFProfTensor {
 }  // namespace tfprof
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CORE_PROFILER_INTERNAL_TFPROF_TENSOR_H_

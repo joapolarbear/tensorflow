@@ -88,18 +88,6 @@ struct Transpose<CPUDevice, T, conjugate> {
         internal::TransposeUsingEigen<CPUDevice, T, 5>(d, in, perm, conjugate,
                                                        out);
         break;
-      case 6:
-        internal::TransposeUsingEigen<CPUDevice, T, 6>(d, in, perm, conjugate,
-                                                       out);
-        break;
-      case 7:
-        internal::TransposeUsingEigen<CPUDevice, T, 7>(d, in, perm, conjugate,
-                                                       out);
-        break;
-      case 8:
-        internal::TransposeUsingEigen<CPUDevice, T, 8>(d, in, perm, conjugate,
-                                                       out);
-        break;
       default:
         TransposeSimple<T, conjugate>(d, in, perm, out);
         break;
@@ -186,7 +174,7 @@ struct Transpose<SYCLDevice, T, conjugate> {
 };
 
 template <bool conjugate>
-struct Transpose<SYCLDevice, tstring, conjugate> {
+struct Transpose<SYCLDevice, string, conjugate> {
   static void run(const SYCLDevice& d, const Tensor& in,
                   const gtl::ArraySlice<int32> perm, Tensor* out) {
     LOG(FATAL) << "DT_STRING not supported on SYCL device.";
@@ -194,7 +182,7 @@ struct Transpose<SYCLDevice, tstring, conjugate> {
 };
 
 // Explicit instantiation.
-template struct Transpose<SYCLDevice, tstring, false>;
+template struct Transpose<SYCLDevice, string, false>;
 
 INSTANTIATE(SYCLDevice)
 #undef INSTANTIATE

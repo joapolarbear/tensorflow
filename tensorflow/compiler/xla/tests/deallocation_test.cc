@@ -15,16 +15,16 @@ limitations under the License.
 
 #include <memory>
 
-#include "absl/types/span.h"
+#include "tensorflow/compiler/xla/client/computation.h"
+#include "tensorflow/compiler/xla/client/computation_builder.h"
 #include "tensorflow/compiler/xla/client/global_data.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/compiler/xla/test.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
 #include "tensorflow/compiler/xla/tests/client_library_test_base.h"
 #include "tensorflow/compiler/xla/tests/test_macros.h"
+#include "tensorflow/core/lib/gtl/array_slice.h"
 
 namespace xla {
 namespace {
@@ -36,8 +36,9 @@ class DeallocationTest : public ClientLibraryTestBase {
   // Build and execute the given computation then verify the results can be
   // transferred from the device successfully.
   std::unique_ptr<GlobalData> ExecuteAndCheckTransfer(
-      XlaBuilder* builder, absl::Span<GlobalData* const> arguments) {
-    XlaComputation computation = builder->Build().ConsumeValueOrDie();
+      ComputationBuilder* builder,
+      tensorflow::gtl::ArraySlice<GlobalData*> arguments) {
+    Computation computation = builder->Build().ConsumeValueOrDie();
     auto global_data =
         client_->Execute(computation, arguments, &execution_options_)
             .ConsumeValueOrDie();
@@ -47,8 +48,8 @@ class DeallocationTest : public ClientLibraryTestBase {
 };
 
 TEST_F(DeallocationTest, DeallocateScalar) {
-  XlaBuilder builder(TestName());
-  ConstantR0<float>(&builder, 42.0);
+  ComputationBuilder builder(client_, TestName());
+  builder.ConstantR0<float>(42.0);
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   // A result can be transferred an arbitrary number of times.  Add an extra
@@ -65,8 +66,8 @@ TEST_F(DeallocationTest, DeallocateScalar) {
 }
 
 TEST_F(DeallocationTest, DeallocateVector) {
-  XlaBuilder builder(TestName());
-  ConstantR1<float>(&builder, {1.0, 2.0, 3.0, 4.0});
+  ComputationBuilder builder(client_, TestName());
+  builder.ConstantR1<float>({1.0, 2.0, 3.0, 4.0});
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   ASSERT_IS_OK(client_->Unregister(*global_data));
@@ -78,8 +79,8 @@ TEST_F(DeallocationTest, DeallocateVector) {
 }
 
 TEST_F(DeallocationTest, DeallocateEmptyVector) {
-  XlaBuilder builder(TestName());
-  ConstantR1<float>(&builder, {});
+  ComputationBuilder builder(client_, TestName());
+  builder.ConstantR1<float>({});
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   ASSERT_IS_OK(client_->Unregister(*global_data));
@@ -91,9 +92,9 @@ TEST_F(DeallocationTest, DeallocateEmptyVector) {
 }
 
 XLA_TEST_F(DeallocationTest, DeallocateTuple) {
-  XlaBuilder builder(TestName());
-  Tuple(&builder, {ConstantR0<float>(&builder, 42.0),
-                   ConstantR1<float>(&builder, {1.0, 2.0, 3.0})});
+  ComputationBuilder builder(client_, TestName());
+  builder.Tuple({builder.ConstantR0<float>(42.0),
+                 builder.ConstantR1<float>({1.0, 2.0, 3.0})});
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   ASSERT_IS_OK(client_->Unregister(*global_data));
@@ -105,11 +106,10 @@ XLA_TEST_F(DeallocationTest, DeallocateTuple) {
 }
 
 XLA_TEST_F(DeallocationTest, DeallocateTupleWithRepeatedElements) {
-  XlaBuilder builder(TestName());
-  auto element = ConstantR0<float>(&builder, 42.0);
-  auto inner_tuple =
-      Tuple(&builder, {ConstantR0<float>(&builder, 42.0), element});
-  Tuple(&builder, {element, inner_tuple, element});
+  ComputationBuilder builder(client_, TestName());
+  auto element = builder.ConstantR0<float>(42.0);
+  auto inner_tuple = builder.Tuple({builder.ConstantR0<float>(42.0), element});
+  builder.Tuple({element, inner_tuple, element});
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   ASSERT_IS_OK(client_->Unregister(*global_data));
@@ -121,11 +121,11 @@ XLA_TEST_F(DeallocationTest, DeallocateTupleWithRepeatedElements) {
 }
 
 XLA_TEST_F(DeallocationTest, DeallocateNestedTuple) {
-  XlaBuilder builder(TestName());
+  ComputationBuilder builder(client_, TestName());
   auto inner_tuple =
-      Tuple(&builder, {ConstantR0<float>(&builder, 42.0),
-                       ConstantR1<float>(&builder, {1.0, 2.0, 3.0})});
-  Tuple(&builder, {inner_tuple, ConstantR1<float>(&builder, {0.123, 0.456})});
+      builder.Tuple({builder.ConstantR0<float>(42.0),
+                     builder.ConstantR1<float>({1.0, 2.0, 3.0})});
+  builder.Tuple({inner_tuple, builder.ConstantR1<float>({0.123, 0.456})});
   auto global_data = ExecuteAndCheckTransfer(&builder, {});
 
   ASSERT_IS_OK(client_->Unregister(*global_data));

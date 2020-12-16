@@ -22,6 +22,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/framework/register_types.h"
 
 namespace tensorflow {
 
@@ -39,7 +40,7 @@ class ParseTensorOp : public OpKernel {
                     "Expected `serialized` to be a scalar, got shape: ",
                     serialized.shape().DebugString()));
 
-    auto serialized_t = serialized.scalar<tstring>();
+    auto serialized_t = serialized.scalar<string>();
 
     TensorProto proto;
     OP_REQUIRES(ctx, ParseProtoUnlimited(&proto, serialized_t()),
@@ -82,7 +83,7 @@ class SerializeTensorOp : public OpKernel {
     Tensor* proto_string = nullptr;
     OP_REQUIRES_OK(context,
                    context->allocate_output(0, TensorShape({}), &proto_string));
-    CHECK(SerializeToTString(proto, &proto_string->scalar<tstring>()()));
+    CHECK(proto.SerializeToString(&proto_string->scalar<string>()()));
   }
 };
 
@@ -91,6 +92,7 @@ class SerializeTensorOp : public OpKernel {
       Name("SerializeTensor").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
       SerializeTensorOp<T>);
 TF_CALL_ALL_TYPES(REGISTER)
+TF_CALL_variant(REGISTER)
 #undef REGISTER
 
 }  // namespace tensorflow

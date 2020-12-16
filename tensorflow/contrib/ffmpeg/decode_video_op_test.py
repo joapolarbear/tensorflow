@@ -42,7 +42,7 @@ class DecodeVideoOpTest(test.TestCase):
       bmp_filename: The filename for the bmp file.
       index: Index location inside the video.
     """
-    with self.cached_session():
+    with self.test_session():
       path = os.path.join(resource_loader.get_data_files_path(), 'testdata',
                           filename)
       with open(path, 'rb') as f:
@@ -59,8 +59,7 @@ class DecodeVideoOpTest(test.TestCase):
       video_op = ffmpeg.decode_video(contents)
       video = video_op.eval()
       self.assertEqual(video.shape, (frames, height, width, 3))
-      # ffmpeg produces results where channels can be off 1.
-      self.assertAllClose(video[index, :, :, :], image, atol=1)
+      self.assertAllEqual(video[index, :, :, :], image)
 
   def testMp4(self):
     self._loadFileAndTest('small.mp4', 560, 320, 166, 'small_100.bmp', 99)

@@ -63,19 +63,7 @@ public final class TensorFlow {
 
   /** Load the TensorFlow runtime C library. */
   static void init() {
-    try {
-      NativeLibrary.load();
-    } catch (Exception e) {
-      /*
-       * This code is called during static initialization of this and of other classes.
-       * If this fails then a NoClassDefFoundError is thrown however this does not
-       * include a cause. Printing the exception manually here ensures that the
-       * necessary information to fix the problem is available.
-       */
-      System.err.println("Failed to load TensorFlow native library");
-      e.printStackTrace();
-      throw e;
-    }
+    NativeLibrary.load();
   }
 
   static {

@@ -51,13 +51,11 @@ def random_batch(batch_size):
 class ResNet50GraphTest(tf.test.TestCase):
 
   def testApply(self):
-    # Use small batches for tests because the OSS version runs
-    # in constrained GPU environment with 1-2GB of memory.
-    batch_size = 8
+    batch_size = 64
     with tf.Graph().as_default():
       images = tf.placeholder(tf.float32, image_shape(None))
       model = resnet50.ResNet50(data_format())
-      predictions = model(images, training=False)
+      predictions = model(images)
 
       init = tf.global_variables_initializer()
 
@@ -65,7 +63,7 @@ class ResNet50GraphTest(tf.test.TestCase):
         sess.run(init)
         np_images, _ = random_batch(batch_size)
         out = sess.run(predictions, feed_dict={images: np_images})
-        self.assertAllEqual([batch_size, 1000], out.shape)
+        self.assertAllEqual([64, 1000], out.shape)
 
   def testTrainWithSummary(self):
     with tf.Graph().as_default():
@@ -89,9 +87,7 @@ class ResNet50GraphTest(tf.test.TestCase):
       init = tf.global_variables_initializer()
       self.assertEqual(321, len(tf.global_variables()))
 
-      # Use small batches for tests because the OSS version runs
-      # in constrained GPU environment with 1-2GB of memory.
-      batch_size = 2
+      batch_size = 32
       with tf.Session() as sess:
         sess.run(init)
         sess.run(tf.contrib.summary.summary_writer_initializer_op())
@@ -118,7 +114,7 @@ class ResNet50Benchmarks(tf.test.Benchmark):
     with tf.Graph().as_default():
       images = tf.placeholder(tf.float32, image_shape(None))
       model = resnet50.ResNet50(data_format())
-      predictions = model(images, training=False)
+      predictions = model(images)
 
       init = tf.global_variables_initializer()
 
@@ -142,8 +138,7 @@ class ResNet50Benchmarks(tf.test.Benchmark):
       with tf.Graph().as_default():
         np_images, np_labels = random_batch(batch_size)
         dataset = tf.data.Dataset.from_tensors((np_images, np_labels)).repeat()
-        images, labels = tf.compat.v1.data.make_one_shot_iterator(
-            dataset).get_next()
+        (images, labels) = dataset.make_one_shot_iterator().get_next()
 
         model = resnet50.ResNet50(data_format())
         logits = model(images, training=True)

@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_POOLING_OPS_COMMON_H_
-#define TENSORFLOW_CORE_KERNELS_POOLING_OPS_COMMON_H_
+#ifndef TENSORFLOW_KERNELS_POOLING_OPS_COMMON_H_
+#define TENSORFLOW_KERNELS_POOLING_OPS_COMMON_H_
 
 #include <vector>
 
@@ -29,9 +29,9 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/work_sharder.h"
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 #include "tensorflow/core/kernels/maxpooling_op_gpu.h"
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 namespace tensorflow {
 
@@ -86,9 +86,7 @@ class MaxPoolingOp : public OpKernel {
                   errors::InvalidArgument("Invalid data format"));
       OP_REQUIRES(
           context, data_format_ == FORMAT_NHWC,
-          errors::InvalidArgument("Default MaxPoolingOp only supports NHWC ",
-                                  "on device type ",
-                                  DeviceTypeString(context->device_type())));
+          errors::InvalidArgument("Default MaxPoolingOp only supports NHWC."));
     } else {
       data_format_ = FORMAT_NHWC;
     }
@@ -96,11 +94,6 @@ class MaxPoolingOp : public OpKernel {
     OP_REQUIRES(context, ksize_.size() == 4,
                 errors::InvalidArgument("Sliding window ksize field must "
                                         "specify 4 dimensions"));
-    for (int i = 0; i < ksize_.size(); ++i) {
-      OP_REQUIRES(context, ksize_[i] > 0,
-                  errors::InvalidArgument("Sliding window ksize for dimension ",
-                                          i, " was zero."));
-    }
     OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
     OP_REQUIRES(context, stride_.size() == 4,
                 errors::InvalidArgument("Sliding window stride field must "
@@ -200,6 +193,7 @@ class MaxPoolingOp : public OpKernel {
       //    and updates the corresponding column(s) in output_as_matrix with the
       //    max value.
       auto shard = [&params, &in_mat, &out_mat](int64 start, int64 limit) {
+
         const int32 in_rows = params.tensor_in_rows;
         const int32 in_cols = params.tensor_in_cols;
         const int32 pad_rows = params.pad_rows;
@@ -269,12 +263,11 @@ class MaxPoolingOp : public OpKernel {
 template <typename Device>
 struct LaunchMaxPoolingNoMask_NCHW_VECT_C;
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
 template <>
 struct LaunchMaxPoolingNoMask_NCHW_VECT_C<Eigen::GpuDevice> {
   static void launch(OpKernelContext* context, const PoolParameters& params,
                      const Tensor& input, Tensor* output) {
-#if GOOGLE_CUDA
     bool status = functor::MaxPoolForwardNoMask_NCHW_VECT_C()(
         reinterpret_cast<const int32*>(input.flat<qint8>().data()),
         params.tensor_in_batch, params.tensor_in_rows, params.tensor_in_cols,
@@ -287,14 +280,9 @@ struct LaunchMaxPoolingNoMask_NCHW_VECT_C<Eigen::GpuDevice> {
       context->SetStatus(errors::Internal(
           "Failed launching LaunchMaxPoolingNoMask_NCHW_VECT_C"));
     }
-#else
-    // ROCm TODO: add support __vmaxs4 on ROCm
-    context->SetStatus(errors::Internal(
-        "Failed launching LaunchMaxPoolingNoMask_NCHW_VECT_C"));
-#endif  // GOOGLE_CUDA
   }
 };
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif
 
 template <typename Device, typename T>
 class MaxPoolingV2Op : public OpKernel {
@@ -411,7 +399,7 @@ class MaxPoolingV2Op : public OpKernel {
     // Spatial MaxPooling implementation.
     //
     // TODO(vrv): Remove this once we no longer need it.
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
     if (std::is_same<Device, GPUDevice>::value) {
       Eigen::PaddingType pt = BrainPadding2EigenPadding(padding);
       if (std::is_same<T, qint8>::value) {
@@ -453,6 +441,7 @@ class MaxPoolingV2Op : public OpKernel {
       //    and updates the corresponding column(s) in output_as_matrix with the
       //    max value.
       auto shard = [&params, &in_mat, &out_mat](int64 start, int64 limit) {
+
         const int32 in_rows = params.tensor_in_rows;
         const int32 in_cols = params.tensor_in_cols;
         const int32 pad_rows = params.pad_rows;
@@ -607,7 +596,7 @@ void SpatialAvgPool(OpKernelContext* context, Tensor* output,
   // so the factor 0.01 (i.e. 1/100) with a max of 10000, was chosen to limit
   // the work unit cost to an operating range in which it emperically performed
   // best.
-  const int64 work_unit_cost = std::max(int64{10000}, work_unit_size / 100LL);
+  const int64 work_unit_cost = std::max(10000LL, work_unit_size / 100LL);
   const DeviceBase::CpuWorkerThreads& worker_threads =
       *(context->device()->tensorflow_cpu_worker_threads());
   Shard(worker_threads.num_threads, worker_threads.workers,
@@ -616,4 +605,4 @@ void SpatialAvgPool(OpKernelContext* context, Tensor* output,
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_POOLING_OPS_COMMON_H_
+#endif  // TENSORFLOW_KERNELS_POOLING_OPS_COMMON_H_

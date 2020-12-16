@@ -21,13 +21,12 @@ limitations under the License.
 #include <WinSock2.h>
 #pragma comment(lib, "Ws2_32.lib")
 #else
-#include <errno.h>
 #include <unistd.h>
 #endif
-
 #include <memory>
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace port {
 
 string Hostname() {
@@ -55,4 +54,5 @@ bool GetCurrentDirectory(string* dir) {
 }
 
 }  // namespace port
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

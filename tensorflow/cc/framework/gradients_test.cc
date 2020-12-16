@@ -26,19 +26,9 @@ limitations under the License.
 #include "tensorflow/core/util/equal_graph_def.h"
 
 namespace tensorflow {
-namespace {
+using namespace ops;  // NOLINT(build/namespaces)
 
-using ops::Assign;
-using ops::Const;
-using ops::Identity;
-using ops::MatMul;
-using ops::OnesLike;
-using ops::Placeholder;
-using ops::Square;
-using ops::Stack;
-using ops::StopGradient;
-using ops::Unstack;
-using ops::Variable;
+namespace {
 
 // TODO(andydavis) Add more unit tests once more gradient functions are ported.
 class GradientsTest : public ::testing::Test {

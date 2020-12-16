@@ -42,8 +42,7 @@ class GraphUtilTest(test.TestCase):
     graph_def = graph_pb2.GraphDef()
     node_a = GetNewNode('A', 'Placeholder', [])
     node_b = GetNewNode('B', 'Op1', ['A'])
-    # A loop in the part that will be fused.
-    node_c = GetNewNode('C', 'Op1', ['B', 'C'])
+    node_c = GetNewNode('C', 'Op1', ['B'])
     node_d = GetNewNode('D', 'Op1', ['C'])
     node_e = GetNewNode('E', 'Op1', ['D'])
     graph_def.node.extend([node_a, node_b, node_c, node_d, node_e])

@@ -16,7 +16,9 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_TENSOR_CODING_H_
 #define TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_TENSOR_CODING_H_
 
-#include "grpcpp/impl/codegen/byte_buffer.h"
+namespace grpc {
+class ByteBuffer;
+}  // namespace grpc
 
 namespace tensorflow {
 class Tensor;
@@ -46,7 +48,7 @@ void EncodeRecvTensorResponseToByteBuffer(const RecvTensorResponse& proto,
 // "val" holds the tensor value to be encoded.
 //
 // Discards original contents of *result.
-void EncodeTensorToByteBuffer(bool is_dead, const Tensor& val, bool require_ack,
+void EncodeTensorToByteBuffer(bool is_dead, const Tensor& val,
                               ::grpc::ByteBuffer* result);
 
 }  // namespace grpc

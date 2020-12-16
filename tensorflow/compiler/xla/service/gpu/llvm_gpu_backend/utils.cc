@@ -17,13 +17,13 @@ limitations under the License.
 
 #include "tensorflow/core/platform/logging.h"
 
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/SourceMgr.h"
 #include "tensorflow/compiler/xla/types.h"
+#include "tensorflow/core/lib/core/stringpiece.h"
+#include "tensorflow/core/lib/strings/strcat.h"
 
 namespace {
 
@@ -52,13 +52,14 @@ std::unique_ptr<llvm::Module> LoadIRModule(const string& filename,
   return module;
 }
 
-string ReplaceFilenameExtension(absl::string_view filename,
-                                absl::string_view new_extension) {
+string ReplaceFilenameExtension(tensorflow::StringPiece filename,
+                                tensorflow::StringPiece new_extension) {
   auto pos = filename.rfind('.');
-  absl::string_view stem = pos == absl::string_view::npos
-                               ? filename
-                               : absl::string_view(filename.data(), pos);
-  return absl::StrCat(stem, ".", new_extension);
+  tensorflow::StringPiece stem =
+      pos == tensorflow::StringPiece::npos
+          ? filename
+          : tensorflow::StringPiece(filename.data(), pos);
+  return tensorflow::strings::StrCat(stem, ".", new_extension);
 }
 
 }  // namespace gpu

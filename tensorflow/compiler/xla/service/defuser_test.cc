@@ -15,22 +15,22 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/defuser.h"
 
-#include "tensorflow/compiler/xla/literal.h"
+#include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/service/hlo_matchers.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/tests/hlo_test_base.h"
+#include "tensorflow/compiler/xla/tests/hlo_verified_test_base.h"
 
 namespace op = xla::testing::opcode_matchers;
 
 namespace xla {
 namespace {
 
-class DefuserTest : public HloTestBase {
+class DefuserTest : public HloVerifiedTestBase {
  protected:
   // Returns the number of fusion instructions in the module.
-  int FusionCount(const HloModule* m) {
+  int FusionCount() {
     int count = 0;
-    for (HloComputation* computation : m->computations()) {
+    for (HloComputation* computation : module().computations()) {
       if (computation->IsFusionComputation()) {
         count++;
       }
@@ -43,7 +43,6 @@ class DefuserTest : public HloTestBase {
 };
 
 TEST_F(DefuserTest, NoFusionInstruction) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -52,14 +51,13 @@ TEST_F(DefuserTest, NoFusionInstruction) {
   builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kAdd, param0, param1));
 
-  m->AddEntryComputation(builder.Build());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  module().AddEntryComputation(builder.Build());
+  EXPECT_EQ(0, FusionCount());
 
-  EXPECT_FALSE(defuser_.Run(m.get()).ValueOrDie());
+  EXPECT_FALSE(defuser_.Run(&module()).ValueOrDie());
 }
 
 TEST_F(DefuserTest, TrivialFusionInstructionAsRoot) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -68,22 +66,21 @@ TEST_F(DefuserTest, TrivialFusionInstructionAsRoot) {
   auto add = builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kAdd, param0, param1));
 
-  auto computation = m->AddEntryComputation(builder.Build());
+  auto computation = module().AddEntryComputation(builder.Build());
   computation->CreateFusionInstruction({add},
                                        HloInstruction::FusionKind::kLoop);
 
   EXPECT_THAT(computation->root_instruction(), op::Fusion());
 
-  EXPECT_EQ(1, FusionCount(m.get()));
-  EXPECT_TRUE(defuser_.Run(m.get()).ValueOrDie());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  EXPECT_EQ(1, FusionCount());
+  EXPECT_TRUE(defuser_.Run(&module()).ValueOrDie());
+  EXPECT_EQ(0, FusionCount());
 
   EXPECT_THAT(computation->root_instruction(),
               op::Add(op::Parameter(), op::Parameter()));
 }
 
 TEST_F(DefuserTest, TrivialFusionInstructionNotAsRoot) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -94,22 +91,21 @@ TEST_F(DefuserTest, TrivialFusionInstructionNotAsRoot) {
   builder.AddInstruction(
       HloInstruction::CreateUnary(shape_, HloOpcode::kNegate, add));
 
-  auto computation = m->AddEntryComputation(builder.Build());
+  auto computation = module().AddEntryComputation(builder.Build());
   computation->CreateFusionInstruction({add},
                                        HloInstruction::FusionKind::kLoop);
 
   EXPECT_THAT(computation->root_instruction(), op::Negate(op::Fusion()));
 
-  EXPECT_EQ(1, FusionCount(m.get()));
-  EXPECT_TRUE(defuser_.Run(m.get()).ValueOrDie());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  EXPECT_EQ(1, FusionCount());
+  EXPECT_TRUE(defuser_.Run(&module()).ValueOrDie());
+  EXPECT_EQ(0, FusionCount());
 
   EXPECT_THAT(computation->root_instruction(),
               op::Negate(op::Add(op::Parameter(), op::Parameter())));
 }
 
 TEST_F(DefuserTest, NonTrivialFusionInstruction) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -128,27 +124,26 @@ TEST_F(DefuserTest, NonTrivialFusionInstruction) {
   auto div = builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kDivide, mul, param3));
   auto constant = builder.AddInstruction(HloInstruction::CreateConstant(
-      LiteralUtil::CreateR2<float>({{1.0, 2.0}, {3.0, 4.0}})));
+      Literal::CreateR2<float>({{1.0, 2.0}, {3.0, 4.0}})));
   auto add2 = builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kAdd, constant, div));
 
-  auto computation = m->AddEntryComputation(builder.Build());
+  auto computation = module().AddEntryComputation(builder.Build());
   computation->CreateFusionInstruction(
       {add2, constant, div, mul, sub, negate, add},
       HloInstruction::FusionKind::kLoop);
 
   EXPECT_THAT(computation->root_instruction(), op::Fusion());
 
-  EXPECT_EQ(1, FusionCount(m.get()));
-  EXPECT_TRUE(defuser_.Run(m.get()).ValueOrDie());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  EXPECT_EQ(1, FusionCount());
+  EXPECT_TRUE(defuser_.Run(&module()).ValueOrDie());
+  EXPECT_EQ(0, FusionCount());
 
   EXPECT_THAT(computation->root_instruction(),
               op::Add(op::Constant(), op::Divide()));
 }
 
 TEST_F(DefuserTest, MultipleFusionInstructions) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -167,11 +162,11 @@ TEST_F(DefuserTest, MultipleFusionInstructions) {
   auto div = builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kDivide, mul, param3));
   auto constant = builder.AddInstruction(HloInstruction::CreateConstant(
-      LiteralUtil::CreateR2<float>({{1.0, 2.0}, {3.0, 4.0}})));
+      Literal::CreateR2<float>({{1.0, 2.0}, {3.0, 4.0}})));
   auto add2 = builder.AddInstruction(
       HloInstruction::CreateBinary(shape_, HloOpcode::kAdd, constant, div));
 
-  auto computation = m->AddEntryComputation(builder.Build());
+  auto computation = module().AddEntryComputation(builder.Build());
   computation->CreateFusionInstruction({add2, constant, div, mul},
                                        HloInstruction::FusionKind::kLoop);
   computation->CreateFusionInstruction({sub, negate, add},
@@ -179,16 +174,15 @@ TEST_F(DefuserTest, MultipleFusionInstructions) {
 
   EXPECT_THAT(computation->root_instruction(), op::Fusion());
 
-  EXPECT_EQ(2, FusionCount(m.get()));
-  EXPECT_TRUE(defuser_.Run(m.get()).ValueOrDie());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  EXPECT_EQ(2, FusionCount());
+  EXPECT_TRUE(defuser_.Run(&module()).ValueOrDie());
+  EXPECT_EQ(0, FusionCount());
 
   EXPECT_THAT(computation->root_instruction(),
               op::Add(op::Constant(), op::Divide()));
 }
 
 TEST_F(DefuserTest, NestedFusionInstructions) {
-  auto m = CreateNewVerifiedModule();
   auto builder = HloComputation::Builder(TestName());
   auto param0 =
       builder.AddInstruction(HloInstruction::CreateParameter(0, shape_, "p0"));
@@ -199,7 +193,7 @@ TEST_F(DefuserTest, NestedFusionInstructions) {
   auto negate = builder.AddInstruction(
       HloInstruction::CreateUnary(shape_, HloOpcode::kNegate, add));
 
-  auto computation = m->AddEntryComputation(builder.Build());
+  auto computation = module().AddEntryComputation(builder.Build());
   auto outer_fusion = computation->CreateFusionInstruction(
       {negate, add}, HloInstruction::FusionKind::kLoop);
   HloInstruction* fused_negate = outer_fusion->fused_expression_root();
@@ -209,9 +203,9 @@ TEST_F(DefuserTest, NestedFusionInstructions) {
 
   EXPECT_THAT(computation->root_instruction(), op::Fusion());
 
-  EXPECT_EQ(2, FusionCount(m.get()));
-  EXPECT_TRUE(defuser_.Run(m.get()).ValueOrDie());
-  EXPECT_EQ(0, FusionCount(m.get()));
+  EXPECT_EQ(2, FusionCount());
+  EXPECT_TRUE(defuser_.Run(&module()).ValueOrDie());
+  EXPECT_EQ(0, FusionCount());
 
   EXPECT_THAT(computation->root_instruction(), op::Negate(op::Add()));
 }

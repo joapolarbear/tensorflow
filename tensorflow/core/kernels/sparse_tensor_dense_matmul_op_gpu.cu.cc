@@ -13,14 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
-#include "tensorflow/core/framework/bounds_check.h"
-#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/sparse_tensor_dense_matmul_op.h"
-#include "tensorflow/core/util/gpu_kernel_helper.h"
+
+#include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/kernels/bounds_check.h"
+#include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
 
@@ -35,7 +36,7 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
   // out_{ij} = sum_k {a_ik b_kj}
   // out = A * B', out_{ij} = sum_k {a_ik (b')_kj}; b'_{kj} = b_{jk}
   const int n = (ADJ_B) ? b_cols : b_rows;
-  GPU_1D_KERNEL_LOOP(index, nnz * p) {
+  CUDA_1D_KERNEL_LOOP(index, nnz * p) {
     const int a_ix = index / p;
     const int j = index % p;
     const int i = ldg(a_indices + 2 * a_ix + ((ADJ_A) ? 1 : 0));
@@ -46,7 +47,7 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
     // out[i, j]
     T* out_location = out + i * p + j;
     if (!FastBoundsCheck(k, n)) {
-      GpuAtomicAdd(out_location, std::numeric_limits<T>::quiet_NaN());
+      CudaAtomicAdd(out_location, std::numeric_limits<T>::quiet_NaN());
       continue;
     }
 
@@ -55,7 +56,7 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
 
     // b_value == (ADJ_B) ? b[j, k] : b[k, j]
     const T b_value = ldg(b + ((ADJ_B) ? j * b_cols + k : k * b_cols + j));
-    GpuAtomicAdd(out_location, a_value * b_value);
+    CudaAtomicAdd(out_location, a_value * b_value);
   }
 }
 
@@ -78,13 +79,12 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
 
     // TODO(ebrevdo): Should this be alpha * nnz instead of
     // out.size()?  Perhaps p * nnz ?
-    GpuLaunchConfig config = GetGpuLaunchConfig(p * nnz, d);
+    CudaLaunchConfig config = GetCudaLaunchConfig(p * nnz, d);
 
-    TF_CHECK_OK(GpuLaunchKernel(
-        SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
-        config.block_count, config.thread_per_block, 0, d.stream(), nnz, m,
-        b_rows, b_cols, p, a_indices.data(), a_values.data(), b.data(),
-        out.data()));
+    SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>
+        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+            nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
+            b.data(), out.data());
 
     return Status::OK();
   }
@@ -108,4 +108,4 @@ DEFINE(float, int64);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

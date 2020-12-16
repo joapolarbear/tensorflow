@@ -11,10 +11,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#ifndef TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H_
-#define TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H_
+#ifndef _TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H
+#define _TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 #define EIGEN_USE_GPU
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -27,15 +27,14 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace functor {
 
-template <typename T>
 struct AdjustSaturationGPU {
   void operator()(GPUDevice* device, const int64 number_of_elements,
-                  const T* const input, const float* const scale,
-                  T* const output);
+                  const float* const input, const float* const scale,
+                  float* const output);
 };
 
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-#endif  // TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H_
+#endif  // GOOGLE_CUDA
+#endif  // _TENSORFLOW_CORE_KERNELS_ADJUST_SATURATION_OP_H

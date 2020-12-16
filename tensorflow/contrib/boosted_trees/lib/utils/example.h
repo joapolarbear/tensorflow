@@ -13,14 +13,13 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_
-#define TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_
+#define THIRD_PARTY_TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_
 
 #include <algorithm>
 #include <unordered_set>
 #include <vector>
 #include "tensorflow/contrib/boosted_trees/lib/utils/optional_value.h"
-#include "tensorflow/core/lib/gtl/inlined_vector.h"
 
 namespace tensorflow {
 namespace boosted_trees {
@@ -125,13 +124,11 @@ struct Example {
   // Sparse integer features indexed by feature column.
   // Note that all integer features are assumed to be categorical, i.e. will
   // never be compared by order. Also these features can be multivalent.
-  // By default we allocate a InlinedVector of length 1 though since that is
-  // the most common case.
-  std::vector<gtl::InlinedVector<int64, 1>> sparse_int_features;
+  std::vector<std::unordered_set<int64>> sparse_int_features;
 };
 
 }  // namespace utils
 }  // namespace boosted_trees
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CONTRIB_BOOSTED_TREES_LIB_UTILS_EXAMPLE_H_

@@ -43,7 +43,8 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/device_memory.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 class Stream;
 namespace internal {
@@ -131,6 +132,7 @@ class TemporaryDeviceMemory : public TemporaryDeviceMemoryBase {
   }
 };
 
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_TEMPORARY_DEVICE_MEMORY_H_

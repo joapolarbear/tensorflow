@@ -19,8 +19,6 @@ from __future__ import print_function
 
 import readline
 
-import six
-
 from tensorflow.python.debug.cli import base_ui
 from tensorflow.python.debug.cli import debugger_cli_common
 
@@ -41,7 +39,11 @@ class ReadlineUI(base_ui.BaseUI):
     readline.set_completer(self._readline_complete)
     readline.parse_and_bind("tab: complete")
 
-    self._input = six.moves.input
+    # For Python 2-3 compatibility.
+    try:
+      self._input = raw_input
+    except NameError:
+      self._input = input
 
   def _readline_complete(self, text, state):
     context, prefix, except_last_word = self._analyze_tab_complete_input(text)

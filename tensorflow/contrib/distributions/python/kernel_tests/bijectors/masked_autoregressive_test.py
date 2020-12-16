@@ -71,7 +71,7 @@ class MaskedAutoregressiveFlowTest(test_util.VectorDistributionTestHelpers,
 
   def testBijector(self):
     x_ = np.arange(3 * 4 * 2).astype(np.float32).reshape(3, 4, 2)
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       ma = MaskedAutoregressiveFlow(
           validate_args=True,
           **self._autoregressive_flow_kwargs)
@@ -79,10 +79,9 @@ class MaskedAutoregressiveFlowTest(test_util.VectorDistributionTestHelpers,
       forward_x = ma.forward(x)
       # Use identity to invalidate cache.
       inverse_y = ma.inverse(array_ops.identity(forward_x))
-      fldj = ma.forward_log_det_jacobian(x, event_ndims=1)
+      fldj = ma.forward_log_det_jacobian(x)
       # Use identity to invalidate cache.
-      ildj = ma.inverse_log_det_jacobian(
-          array_ops.identity(forward_x), event_ndims=1)
+      ildj = ma.inverse_log_det_jacobian(array_ops.identity(forward_x))
       variables.global_variables_initializer().run()
       [
           forward_x_,
@@ -102,7 +101,7 @@ class MaskedAutoregressiveFlowTest(test_util.VectorDistributionTestHelpers,
 
   def testMutuallyConsistent(self):
     dims = 4
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       ma = MaskedAutoregressiveFlow(
           validate_args=True,
           **self._autoregressive_flow_kwargs)
@@ -121,7 +120,7 @@ class MaskedAutoregressiveFlowTest(test_util.VectorDistributionTestHelpers,
 
   def testInvertMutuallyConsistent(self):
     dims = 4
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       ma = Invert(MaskedAutoregressiveFlow(
           validate_args=True,
           **self._autoregressive_flow_kwargs))
@@ -147,18 +146,6 @@ class MaskedAutoregressiveFlowShiftOnlyTest(MaskedAutoregressiveFlowTest):
         "shift_and_log_scale_fn": masked_autoregressive_default_template(
             hidden_layers=[2], shift_only=True),
         "is_constant_jacobian": True,
-    }
-
-
-class MaskedAutoregressiveFlowUnrollLoopTest(MaskedAutoregressiveFlowTest):
-
-  @property
-  def _autoregressive_flow_kwargs(self):
-    return {
-        "shift_and_log_scale_fn": masked_autoregressive_default_template(
-            hidden_layers=[2], shift_only=False),
-        "is_constant_jacobian": False,
-        "unroll_loop": True,
     }
 
 

@@ -24,7 +24,6 @@ import numpy as np
 from tensorflow.contrib.distributions.python.ops import half_normal as hn_lib
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.ops import array_ops
@@ -42,7 +41,6 @@ def try_import(name):  # pylint: disable=invalid-name
     tf_logging.warning("Could not import %s: %s" % (name, str(e)))
   return module
 
-
 stats = try_import("scipy.stats")
 
 
@@ -57,7 +55,7 @@ class HalfNormalTest(test.TestCase):
     self.assertAllEqual(all_true, is_finite)
 
   def _testParamShapes(self, sample_shape, expected):
-    with self.cached_session():
+    with self.test_session():
       param_shapes = hn_lib.HalfNormal.param_shapes(sample_shape)
       scale_shape = param_shapes["scale"]
       self.assertAllEqual(expected, scale_shape.eval())
@@ -89,7 +87,7 @@ class HalfNormalTest(test.TestCase):
         tensor_shape.TensorShape(sample_shape), sample_shape)
 
   def testHalfNormalLogPDF(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 6
       scale = constant_op.constant([3.0] * batch_size)
       x = np.array([-2.5, 2.5, 4.0, 0.0, -1.0, 2.0], dtype=np.float32)
@@ -108,7 +106,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllClose(np.exp(expected_log_pdf), pdf.eval())
 
   def testHalfNormalLogPDFMultidimensional(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 6
       scale = constant_op.constant([[3.0, 1.0]] * batch_size)
       x = np.array([[-2.5, 2.5, 4.0, 0.0, -1.0, 2.0]], dtype=np.float32).T
@@ -127,7 +125,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllClose(np.exp(expected_log_pdf), pdf.eval())
 
   def testHalfNormalCDF(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 50
       scale = self._rng.rand(batch_size) + 1.0
       x = np.linspace(-8.0, 8.0, batch_size).astype(np.float64)
@@ -146,7 +144,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllClose(np.exp(expected_logcdf), cdf.eval(), atol=0)
 
   def testHalfNormalSurvivalFunction(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 50
       scale = self._rng.rand(batch_size) + 1.0
       x = np.linspace(-8.0, 8.0, batch_size).astype(np.float64)
@@ -165,7 +163,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllClose(np.exp(expected_logsf), sf.eval(), atol=0)
 
   def testHalfNormalQuantile(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 50
       scale = self._rng.rand(batch_size) + 1.0
       p = np.linspace(0., 1.0, batch_size).astype(np.float64)
@@ -193,13 +191,13 @@ class HalfNormalTest(test.TestCase):
           print(func.__name__)
           value = func(x)
           grads = gradients_impl.gradients(value, [scale])
-          with self.session(graph=g):
+          with self.test_session(graph=g):
             variables.global_variables_initializer().run()
             self.assertAllFinite(value)
             self.assertAllFinite(grads[0])
 
   def testHalfNormalEntropy(self):
-    with self.cached_session():
+    with self.test_session():
       scale = np.array([[1.0, 2.0, 3.0]])
       halfnorm = hn_lib.HalfNormal(scale=scale)
 
@@ -212,7 +210,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllClose(expected_entropy, entropy.eval())
 
   def testHalfNormalMeanAndMode(self):
-    with self.cached_session():
+    with self.test_session():
       scale = np.array([11., 12., 13.])
 
       halfnorm = hn_lib.HalfNormal(scale=scale)
@@ -225,7 +223,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllEqual([0., 0., 0.], halfnorm.mode().eval())
 
   def testHalfNormalVariance(self):
-    with self.cached_session():
+    with self.test_session():
       scale = np.array([7., 7., 7.])
       halfnorm = hn_lib.HalfNormal(scale=scale)
       expected_variance = scale ** 2.0 * (1.0 - 2.0 / np.pi)
@@ -234,7 +232,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllEqual(expected_variance, halfnorm.variance().eval())
 
   def testHalfNormalStandardDeviation(self):
-    with self.cached_session():
+    with self.test_session():
       scale = np.array([7., 7., 7.])
       halfnorm = hn_lib.HalfNormal(scale=scale)
       expected_variance = scale ** 2.0 * (1.0 - 2.0 / np.pi)
@@ -243,7 +241,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllEqual(np.sqrt(expected_variance), halfnorm.stddev().eval())
 
   def testHalfNormalSample(self):
-    with self.cached_session():
+    with self.test_session():
       scale = constant_op.constant(3.0)
       n = constant_op.constant(100000)
       halfnorm = hn_lib.HalfNormal(scale=scale)
@@ -265,7 +263,7 @@ class HalfNormalTest(test.TestCase):
       self.assertAllEqual(expected_shape_static, sample.eval().shape)
 
   def testHalfNormalSampleMultiDimensional(self):
-    with self.cached_session():
+    with self.test_session():
       batch_size = 2
       scale = constant_op.constant([[2.0, 3.0]] * batch_size)
       n = constant_op.constant(100000)
@@ -289,14 +287,13 @@ class HalfNormalTest(test.TestCase):
       self.assertAllEqual(expected_shape_static, sample.eval().shape)
 
   def testNegativeSigmaFails(self):
-    with self.cached_session():
-      with self.assertRaisesWithPredicateMatch(errors.InvalidArgumentError,
-                                               "Condition x > 0 did not hold"):
-        _ = hn_lib.HalfNormal(scale=[-5.], validate_args=True, name="G")
-        # Error detected statically; no need for _.mean().eval()
+    with self.test_session():
+      halfnorm = hn_lib.HalfNormal(scale=[-5.], validate_args=True, name="G")
+      with self.assertRaisesOpError("Condition x > 0 did not hold"):
+        halfnorm.mean().eval()
 
   def testHalfNormalShape(self):
-    with self.cached_session():
+    with self.test_session():
       scale = constant_op.constant([6.0] * 5)
       halfnorm = hn_lib.HalfNormal(scale=scale)
 
@@ -309,7 +306,7 @@ class HalfNormalTest(test.TestCase):
     scale = array_ops.placeholder(dtype=dtypes.float32)
     halfnorm = hn_lib.HalfNormal(scale=scale)
 
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       # get_batch_shape should return an "<unknown>" tensor.
       self.assertEqual(halfnorm.batch_shape, tensor_shape.TensorShape(None))
       self.assertEqual(halfnorm.event_shape, ())

@@ -21,7 +21,6 @@ from __future__ import print_function
 import os
 import time
 
-from six.moves import xrange  # pylint: disable=redefined-builtin
 from tensorflow.python.client import session
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
@@ -80,7 +79,7 @@ class DecodeJpegBenchmark(test.Benchmark):
           initializer=image_ops.encode_jpeg(tiled_image))
 
     with session.Session() as sess:
-      self.evaluate(variables.global_variables_initializer())
+      sess.run(variables.global_variables_initializer())
       images = []
       for _ in xrange(parallelism):
         if crop_window is None:
@@ -105,13 +104,12 @@ class DecodeJpegBenchmark(test.Benchmark):
 
       for _ in xrange(3):
         # Skip warm up time.
-        self.evaluate(r)
+        sess.run(r)
 
       start_time = time.time()
       for _ in xrange(num_iters):
-        self.evaluate(r)
-      end_time = time.time()
-    return end_time - start_time
+        sess.run(r)
+    return time.time() - start_time
 
   def benchmarkDecodeJpegSmall(self):
     """Evaluate single DecodeImageOp for small size image."""

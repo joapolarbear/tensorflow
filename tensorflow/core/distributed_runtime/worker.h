@@ -13,14 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_
-#define TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_
+#define THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_
 
 #include <unordered_map>
 
 #include "tensorflow/core/distributed_runtime/graph_mgr.h"
 #include "tensorflow/core/distributed_runtime/partial_run_mgr.h"
-#include "tensorflow/core/distributed_runtime/recent_request_ids.h"
 #include "tensorflow/core/distributed_runtime/session_mgr.h"
 #include "tensorflow/core/distributed_runtime/worker_interface.h"
 
@@ -53,8 +52,7 @@ class Worker : public WorkerInterface {
                                 CreateWorkerSessionResponse* response,
                                 StatusCallback done) override;
 
-  void DeleteWorkerSessionAsync(CallOptions* opts,
-                                const DeleteWorkerSessionRequest* request,
+  void DeleteWorkerSessionAsync(const DeleteWorkerSessionRequest* request,
                                 DeleteWorkerSessionResponse* response,
                                 StatusCallback done) override;
 
@@ -91,26 +89,8 @@ class Worker : public WorkerInterface {
   void TracingAsync(const TracingRequest* request, TracingResponse* response,
                     StatusCallback done) override;
 
-  void RecvBufAsync(CallOptions* opts, const RecvBufRequest* request,
-                    RecvBufResponse* response, StatusCallback done) override;
-
-  void CompleteGroupAsync(CallOptions* opts,
-                          const CompleteGroupRequest* request,
-                          CompleteGroupResponse* response,
-                          StatusCallback done) override;
-
-  void CompleteInstanceAsync(CallOptions* opts,
-                             const CompleteInstanceRequest* request,
-                             CompleteInstanceResponse* response,
-                             StatusCallback done) override;
-
-  void GetStepSequenceAsync(const GetStepSequenceRequest* request,
-                            GetStepSequenceResponse* response,
-                            StatusCallback done) override;
-
  protected:
   WorkerEnv* const env_;  // Not owned.
-  RecentRequestIds recent_request_ids_;
 
   Status PrepareRecvTensor(const Rendezvous::ParsedKey& parsed,
                            Device** src_dev);
@@ -120,7 +100,8 @@ class Worker : public WorkerInterface {
  private:
   PartialRunMgr partial_run_mgr_;
 
-  CancellationManager cancellation_manager_;
+  mutex mu_;
+  CancellationManager* cancellation_manager_ GUARDED_BY(mu_);
 
   Status PrepareRunGraph(RunGraphRequestWrapper* req,
                          GraphMgr::NamedTensors* in,
@@ -139,4 +120,4 @@ class Worker : public WorkerInterface {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_WORKER_H_

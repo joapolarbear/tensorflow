@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/core/framework/kernel_def_builder.h"
 
 namespace tensorflow {
@@ -39,8 +38,8 @@ class LRNOp : public XlaOpKernel {
     OP_REQUIRES(ctx, in_shape.dims() == 4,
                 errors::InvalidArgument("in must be 4-dimensional"));
 
-    xla::XlaBuilder* builder = ctx->builder();
-    xla::XlaOp input = ctx->Input(0);
+    xla::ComputationBuilder* builder = ctx->builder();
+    xla::ComputationDataHandle input = ctx->Input(0);
 
     // sqr_sum[a, b, c, d] =
     //    sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
@@ -48,22 +47,19 @@ class LRNOp : public XlaOpKernel {
 
     // We use a window of depth_radius_ * 2 + 1, to account for the current
     // element and a depth_radius_ on either side.
-    auto accumulation_type = XlaHelpers::SumAccumulationType(input_type(0));
-    auto converted = XlaHelpers::ConvertElementType(input, accumulation_type);
-    auto squared = xla::Mul(converted, converted);
-    auto reduce = xla::ReduceWindow(
-        squared, XlaHelpers::Zero(builder, accumulation_type),
-        *ctx->GetOrCreateAdd(accumulation_type),
+    auto squared = builder->Mul(input, input);
+    auto sqr_sum = builder->ReduceWindow(
+        squared, XlaHelpers::Zero(builder, input_type(0)),
+        *ctx->GetOrCreateAdd(input_type(0)),
         /* window_dimensions = */ {1, 1, 1, depth_radius_ * 2 + 1},
         /* window_strides = */ {1, 1, 1, 1}, xla::Padding::kSame);
-    auto sqr_sum = XlaHelpers::ConvertElementType(reduce, input_type(0));
 
-    auto scale = xla::Pow(
-        xla::Add(xla::ConstantR0<float>(builder, bias_),
-                 xla::Mul(xla::ConstantR0<float>(builder, alpha_), sqr_sum)),
-        xla::ConstantR0<float>(builder, -beta_));
+    auto scale = builder->Pow(
+        builder->Add(builder->ConstantR0<float>(bias_),
+                     builder->Mul(builder->ConstantR0<float>(alpha_), sqr_sum)),
+        builder->ConstantR0<float>(-beta_));
 
-    ctx->SetOutput(0, xla::Mul(input, scale));
+    ctx->SetOutput(0, builder->Mul(input, scale));
   }
 
  private:
@@ -110,10 +106,10 @@ class LRNGradOp : public XlaOpKernel {
             "input_grads, input_image, and out_image should have the same "
             "shape"));
 
-    xla::XlaBuilder* builder = ctx->builder();
-    xla::XlaOp in_grads = ctx->Input(0);
-    xla::XlaOp in_image = ctx->Input(1);
-    xla::XlaOp out_image = ctx->Input(2);
+    xla::ComputationBuilder* builder = ctx->builder();
+    xla::ComputationDataHandle in_grads = ctx->Input(0);
+    xla::ComputationDataHandle in_image = ctx->Input(1);
+    xla::ComputationDataHandle out_image = ctx->Input(2);
 
     // This code is ported from tensorflow/core/kernels/lrn_op.cc. In Python
     // pseudo-code, the Eigen code does this for each spatial position:
@@ -134,38 +130,32 @@ class LRNGradOp : public XlaOpKernel {
     //     dyi *= out_grads[j]
     //     grads[k] += dyi
 
-    auto accumulation_type = XlaHelpers::SumAccumulationType(input_type(0));
-    auto converted =
-        XlaHelpers::ConvertElementType(in_image, accumulation_type);
-    auto squared = xla::Mul(converted, converted);
-    auto reduce = xla::ReduceWindow(
-        squared, XlaHelpers::Zero(builder, accumulation_type),
-        *ctx->GetOrCreateAdd(accumulation_type),
+    auto squared = builder->Mul(in_image, in_image);
+    auto sqr_sum = builder->ReduceWindow(
+        squared, XlaHelpers::Zero(builder, input_type(0)),
+        *ctx->GetOrCreateAdd(input_type(0)),
         /* window_dimensions = */ {1, 1, 1, depth_radius_ * 2 + 1},
         /* window_strides = */ {1, 1, 1, 1}, xla::Padding::kSame);
-    auto sqr_sum = XlaHelpers::ConvertElementType(reduce, input_type(0));
 
     auto norm =
-        xla::Add(xla::ConstantR0<float>(builder, bias_),
-                 xla::Mul(xla::ConstantR0<float>(builder, alpha_), sqr_sum));
+        builder->Add(builder->ConstantR0<float>(bias_),
+                     builder->Mul(builder->ConstantR0<float>(alpha_), sqr_sum));
 
-    auto dy = xla::Mul(
-        xla::Mul(xla::ConstantR0<float>(builder, -2.0f * alpha_ * beta_),
-                 xla::Div(out_image, norm)),
+    auto dy = builder->Mul(
+        builder->Mul(builder->ConstantR0<float>(-2.0f * alpha_ * beta_),
+                     builder->Div(out_image, norm)),
         in_grads);
 
-    auto converted_dy = XlaHelpers::ConvertElementType(dy, accumulation_type);
-    auto dy_reduce = xla::ReduceWindow(
-        converted_dy, XlaHelpers::Zero(builder, accumulation_type),
-        *ctx->GetOrCreateAdd(accumulation_type),
+    auto dy_reduced = builder->ReduceWindow(
+        dy, XlaHelpers::Zero(builder, input_type(0)),
+        *ctx->GetOrCreateAdd(input_type(0)),
         /* window_dimensions = */ {1, 1, 1, depth_radius_ * 2 + 1},
         /* window_strides = */ {1, 1, 1, 1}, xla::Padding::kSame);
-    auto dy_reduced = XlaHelpers::ConvertElementType(dy_reduce, input_type(0));
 
-    xla::XlaOp gradients = xla::Add(
-        xla::Mul(in_image, dy_reduced),
-        xla::Mul(in_grads,
-                 xla::Pow(norm, xla::ConstantR0<float>(builder, -beta_))));
+    xla::ComputationDataHandle gradients = builder->Add(
+        builder->Mul(in_image, dy_reduced),
+        builder->Mul(in_grads,
+                     builder->Pow(norm, builder->ConstantR0<float>(-beta_))));
 
     ctx->SetOutput(0, gradients);
   }

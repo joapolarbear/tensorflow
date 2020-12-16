@@ -30,12 +30,10 @@ END
 The type of the input.
 END
   }
-  summary:
-"Computes a range that covers the actual values present in a quantized tensor."
+  summary: "Given a quantized tensor described by (input, input_min, input_max), outputs a"
   description: <<END
-Given a quantized tensor described by `(input, input_min, input_max)`, outputs a
-range that covers the actual values present in that tensor. This op is typically
-used to produce the `requested_output_min` and `requested_output_max` for
-`Requantize`.
+range that covers the actual values present in that tensor.  This op is
+typically used to produce the requested_output_min and requested_output_max for
+Requantize.
 END
 }

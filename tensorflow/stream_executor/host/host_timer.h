@@ -20,7 +20,8 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace host {
 
 class HostTimer : public internal::TimerInterface {
@@ -56,6 +57,7 @@ class HostTimer : public internal::TimerInterface {
 };
 
 }  // namespace host
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_HOST_HOST_TIMER_H_

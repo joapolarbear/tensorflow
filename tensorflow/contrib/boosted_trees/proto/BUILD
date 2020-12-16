@@ -1,10 +1,19 @@
-load("//tensorflow/core/platform:default/build_config.bzl", "tf_proto_library")
-
-package(
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+load("//tensorflow/core:platform/default/build_config.bzl", "tf_proto_library")
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
+)
 
 tf_proto_library(
     name = "learner_proto",
@@ -12,9 +21,6 @@ tf_proto_library(
         "learner.proto",
     ],
     cc_api_version = 2,
-    protodeps = [
-        ":tree_config_proto",
-    ],
     visibility = ["//visibility:public"],
 )
 

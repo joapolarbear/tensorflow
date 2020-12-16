@@ -50,7 +50,6 @@ class PublicAPIVisitor(object):
     # Each entry maps a module path to a name to ignore in traversal.
     self._do_not_descend_map = {
         'tf': [
-            'compiler',
             'core',
             'examples',
             'flags',  # Don't add flags
@@ -70,8 +69,6 @@ class PublicAPIVisitor(object):
         'tf.app': ['flags'],
         # Imported for compatibility between py2/3.
         'tf.test': ['mock'],
-        # Externalized modules of the Keras API.
-        'tf.keras': ['applications', 'preprocessing']
     }
 
   @property
@@ -102,10 +99,9 @@ class PublicAPIVisitor(object):
     """Override the default root name of 'tf'."""
     self._root_name = root_name
 
-  def _is_private(self, path, name, obj=None):
+  def _is_private(self, path, name):
     """Return whether a name is private."""
     # TODO(wicke): Find out what names to exclude.
-    del obj  # Unused.
     return ((path in self._private_map and
              name in self._private_map[path]) or
             (name.startswith('_') and not re.match('__.*__$', name) or
@@ -130,7 +126,7 @@ class PublicAPIVisitor(object):
 
     # Remove things that are not visible.
     for name, child in list(children):
-      if self._is_private(full_path, name, child):
+      if self._is_private(full_path, name):
         children.remove((name, child))
 
     self._visitor(path, parent, children)

@@ -73,23 +73,10 @@ Python than the Python code mentioned in the
 [Inception tutorial](https://www.tensorflow.org/tutorials/image_recognition/).
 and could be easier to add visualization or debug code.
 
-
-`bazel-bin/tensorflow/examples/label_image/label_image_py` should be there after
-```bash
-$ bazel build tensorflow/examples/label_image/...
-```
-
-Run
-
-```bash
-$ bazel-bin/tensorflow/examples/label_image/label_image_py
-```
-
-Or, with tensorflow python package installed, you can run it like:
+With tensorflow python package installed, you can run it like:
 ```bash
 $ python3 tensorflow/examples/label_image/label_image.py
 ```
-
 And get result similar to this:
 ```
 military uniform 0.834305

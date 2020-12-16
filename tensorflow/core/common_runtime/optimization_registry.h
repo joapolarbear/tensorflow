@@ -35,7 +35,6 @@ struct SessionOptions;
 // as a key into a state dictionary if it wants to keep state across
 // calls.
 struct GraphOptimizationPassOptions {
-  // Filled in by DirectSession for PRE_PLACEMENT optimizations. Can be empty.
   string session_handle;
   const SessionOptions* session_options = nullptr;
   const CostModel* cost_model = nullptr;
@@ -66,13 +65,6 @@ class GraphOptimizationPass {
  public:
   virtual ~GraphOptimizationPass() {}
   virtual Status Run(const GraphOptimizationPassOptions& options) = 0;
-  void set_name(const string& name) { name_ = name; }
-  string name() const { return name_; }
-
- private:
-  // The name of the opitimization pass, which is the same as the inherited
-  // class name.
-  string name_;
 };
 
 // The key is a 'phase' number. Phases are executed in increasing
@@ -95,10 +87,6 @@ class OptimizationPassRegistry {
   void Register(Grouping grouping, int phase,
                 std::unique_ptr<GraphOptimizationPass> pass);
 
-  const std::map<Grouping, GraphOptimizationPasses>& groups() {
-    return groups_;
-  }
-
   // Run all passes in grouping, ordered by phase, with the same
   // options.
   Status RunGrouping(Grouping grouping,
@@ -106,10 +94,6 @@ class OptimizationPassRegistry {
 
   // Returns the global registry of optimization passes.
   static OptimizationPassRegistry* Global();
-
-  // Prints registered optimization passes for debugging.
-  void LogGrouping(Grouping grouping, int vlog_level);
-  void LogAllGroupings(int vlog_level);
 
  private:
   std::map<Grouping, GraphOptimizationPasses> groups_;
@@ -121,9 +105,7 @@ class OptimizationPassRegistration {
  public:
   OptimizationPassRegistration(OptimizationPassRegistry::Grouping grouping,
                                int phase,
-                               std::unique_ptr<GraphOptimizationPass> pass,
-                               string optimization_pass_name) {
-    pass->set_name(optimization_pass_name);
+                               std::unique_ptr<GraphOptimizationPass> pass) {
     OptimizationPassRegistry::Global()->Register(grouping, phase,
                                                  std::move(pass));
   }
@@ -137,13 +119,11 @@ class OptimizationPassRegistration {
 #define REGISTER_OPTIMIZATION_UNIQ_HELPER(ctr, grouping, phase, optimization) \
   REGISTER_OPTIMIZATION_UNIQ(ctr, grouping, phase, optimization)
 
-#define REGISTER_OPTIMIZATION_UNIQ(ctr, grouping, phase, optimization)         \
-  static ::tensorflow::optimization_registration::OptimizationPassRegistration \
-      register_optimization_##ctr(                                             \
-          grouping, phase,                                                     \
-          ::std::unique_ptr<::tensorflow::GraphOptimizationPass>(              \
-              new optimization()),                                             \
-          #optimization)
+#define REGISTER_OPTIMIZATION_UNIQ(ctr, grouping, phase, optimization) \
+  static optimization_registration::OptimizationPassRegistration       \
+      register_optimization_##ctr(                                     \
+          grouping, phase,                                             \
+          std::unique_ptr<GraphOptimizationPass>(new optimization))
 
 }  // namespace tensorflow
 

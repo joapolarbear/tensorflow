@@ -113,7 +113,7 @@ class ExpressionEvaluator(object):
       dump: an instance of `DebugDumpDir`.
     """
     self._dump = dump
-    self._cached_tensor_values = {}
+    self._cached_tensor_values = dict()
 
   def evaluate(self, expression):
     """Parse an expression.

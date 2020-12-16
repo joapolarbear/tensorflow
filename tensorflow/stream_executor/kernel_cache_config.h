@@ -18,7 +18,8 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_KERNEL_CACHE_CONFIG_H_
 #define TENSORFLOW_STREAM_EXECUTOR_KERNEL_CACHE_CONFIG_H_
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 // This enum represents potential configurations of L1/shared memory when
 // running a particular kernel. These values represent user preference, and
@@ -37,6 +38,7 @@ enum class KernelCacheConfig {
   kPreferEqual,
 };
 
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_KERNEL_CACHE_CONFIG_H_

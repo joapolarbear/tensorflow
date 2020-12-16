@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <cerrno>
 #include <cstdlib>
-#include <cstring>
 #include <unordered_set>
 
 #include <netinet/in.h>

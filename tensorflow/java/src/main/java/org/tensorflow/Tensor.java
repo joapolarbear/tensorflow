@@ -140,17 +140,15 @@ public final class Tensor<T> implements AutoCloseable {
     Tensor<?> t = new Tensor(dtype);
     t.shapeCopy = new long[numDimensions(obj, dtype)];
     fillShape(obj, 0, t.shapeCopy);
-    long nativeHandle;
     if (t.dtype != DataType.STRING) {
       int byteSize = elemByteSize(t.dtype) * numElements(t.shapeCopy);
-      nativeHandle = allocate(t.dtype.c(), t.shapeCopy, byteSize);
-      setValue(nativeHandle, obj);
+      t.nativeHandle = allocate(t.dtype.c(), t.shapeCopy, byteSize);
+      setValue(t.nativeHandle, obj);
     } else if (t.shapeCopy.length != 0) {
-      nativeHandle = allocateNonScalarBytes(t.shapeCopy, (Object[]) obj);
+      t.nativeHandle = allocateNonScalarBytes(t.shapeCopy, (Object[]) obj);
     } else {
-      nativeHandle = allocateScalarBytes((byte[]) obj);
+      t.nativeHandle = allocateScalarBytes((byte[]) obj);
     }
-    t.nativeRef = new NativeReference(nativeHandle);
     return t;
   }
 
@@ -247,8 +245,23 @@ public final class Tensor<T> implements AutoCloseable {
     return ret;
   }
 
+  /**
+   * Creates a Tensor of any type with data from the given buffer.
+   *
+   * <p>Creates a Tensor with the provided shape of any type where the tensor's data has been
+   * encoded into {@code data} as per the specification of the TensorFlow <a
+   * href="https://www.tensorflow.org/code/tensorflow/c/c_api.h">C
+   * API</a>.
+   *
+   * @param <T> The tensor element type
+   * @param type the tensor element type, specified as a DataType. This must agree with T.
+   * @param shape the tensor shape.
+   * @param data a buffer containing the tensor data.
+   * @throws IllegalArgumentException If the tensor datatype or shape is not compatible with the
+   *     buffer
+   */
   private static Tensor<?> create(DataType dtype, long[] shape, ByteBuffer data) {
-    int nremaining;
+    int nremaining = 0;
     if (dtype != DataType.STRING) {
       int elemBytes = elemByteSize(dtype);
       if (data.remaining() % elemBytes != 0) {
@@ -301,22 +314,23 @@ public final class Tensor<T> implements AutoCloseable {
     }
     Tensor<T> t = new Tensor<T>(dataType);
     t.shapeCopy = Arrays.copyOf(shape, shape.length);
-    long nativeHandle = allocate(t.dtype.c(), t.shapeCopy, nbytes);
-    t.nativeRef = new NativeReference(nativeHandle);
+    t.nativeHandle = allocate(t.dtype.c(), t.shapeCopy, nbytes);
     return t;
   }
 
   /**
    * Release resources associated with the Tensor.
    *
-   * <p><b>WARNING:</b>This must be invoked for all tensors that were not been produced by an eager
-   * operation or memory will be leaked.
+   * <p><b>WARNING:</b>If not invoked, memory will be leaked.
    *
    * <p>The Tensor object is no longer usable after {@code close} returns.
    */
   @Override
   public void close() {
-    nativeRef.release();
+    if (nativeHandle != 0) {
+      delete(nativeHandle);
+      nativeHandle = 0;
+    }
   }
 
   /** Returns the {@link DataType} of elements stored in the Tensor. */
@@ -360,7 +374,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a float scalar.
    */
   public float floatValue() {
-    return scalarFloat(getNativeHandle());
+    return scalarFloat(nativeHandle);
   }
 
   /**
@@ -369,7 +383,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a double scalar.
    */
   public double doubleValue() {
-    return scalarDouble(getNativeHandle());
+    return scalarDouble(nativeHandle);
   }
 
   /**
@@ -378,7 +392,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a int scalar.
    */
   public int intValue() {
-    return scalarInt(getNativeHandle());
+    return scalarInt(nativeHandle);
   }
 
   /**
@@ -387,7 +401,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a long scalar.
    */
   public long longValue() {
-    return scalarLong(getNativeHandle());
+    return scalarLong(nativeHandle);
   }
 
   /**
@@ -396,7 +410,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a boolean scalar.
    */
   public boolean booleanValue() {
-    return scalarBoolean(getNativeHandle());
+    return scalarBoolean(nativeHandle);
   }
 
   /**
@@ -405,7 +419,7 @@ public final class Tensor<T> implements AutoCloseable {
    * @throws IllegalArgumentException if the Tensor does not represent a boolean scalar.
    */
   public byte[] bytesValue() {
-    return scalarBytes(getNativeHandle());
+    return scalarBytes(nativeHandle);
   }
 
   /**
@@ -434,7 +448,7 @@ public final class Tensor<T> implements AutoCloseable {
    */
   public <U> U copyTo(U dst) {
     throwExceptionIfTypeIsIncompatible(dst);
-    readNDArray(getNativeHandle(), dst);
+    readNDArray(nativeHandle, dst);
     return dst;
   }
 
@@ -539,27 +553,16 @@ public final class Tensor<T> implements AutoCloseable {
     @SuppressWarnings("rawtypes")
     Tensor<?> t = new Tensor(DataType.fromC(dtype(handle)));
     t.shapeCopy = shape(handle);
-    t.nativeRef = new NativeReference(handle);
-    return t;
-  }
-
-  /**
-   * Create an eager Tensor object from a handle to the C TF_Tensor object.
-   *
-   * <p>Takes ownership of the handle.
-   */
-  static Tensor<?> fromHandle(long handle, EagerSession session) {
-    Tensor<?> t = fromHandle(handle);
-    t.nativeRef.eager(session, t);
+    t.nativeHandle = handle;
     return t;
   }
 
   long getNativeHandle() {
-    return nativeRef.tensorHandle;
+    return nativeHandle;
   }
 
-  private NativeReference nativeRef = null;
-  private final DataType dtype;
+  private long nativeHandle;
+  private DataType dtype;
   private long[] shapeCopy = null;
 
   private Tensor(DataType t) {
@@ -567,7 +570,7 @@ public final class Tensor<T> implements AutoCloseable {
   }
 
   private ByteBuffer buffer() {
-    return buffer(getNativeHandle()).order(ByteOrder.nativeOrder());
+    return buffer(nativeHandle).order(ByteOrder.nativeOrder());
   }
 
   private static IllegalArgumentException incompatibleBuffer(Buffer buf, DataType dataType) {
@@ -592,11 +595,20 @@ public final class Tensor<T> implements AutoCloseable {
   }
 
   private static int elemByteSize(DataType dataType) {
-    int size = dataType.byteSize();
-    if (size < 0) {
+    switch (dataType) {
+      case FLOAT:
+      case INT32:
+        return 4;
+      case DOUBLE:
+      case INT64:
+        return 8;
+      case BOOL:
+      case UINT8:
+        return 1;
+      case STRING:
         throw new IllegalArgumentException("STRING tensors do not have a fixed element size");
     }
-    return size;
+    throw new IllegalArgumentException("DataType " + dataType + " is not supported yet");
   }
 
   private static void throwExceptionIfNotByteOfByteArrays(Object array) {
@@ -604,65 +616,6 @@ public final class Tensor<T> implements AutoCloseable {
       throw new IllegalArgumentException(
           "object cannot be converted to a Tensor as it includes an array with null elements");
     }
-  }
-
-  /**
-   * Reference to the underlying native tensor
-   *
-   * <p>Tensors are commonly allocated in a `try-with-resources` statement, where they get
-   * automatically released after executing the last line of the `try` block they were declared in.
-   *
-   * <p>They can also be attached to an eager session, where in this case their lifetime ends either
-   * when this session is closed or when the Tensor instance is no longer referenced and have been
-   * garbage-collected.
-   *
-   * <p>This helper class wraps the tensor native handle and support both situations; If an eager
-   * reference to the tensor exists, it will take care of releasing the tensor at the end of its
-   * life. If the tensor is being explicitly closed before this happens, it will take cake of
-   * clearing its association with any eager session before cleaning up the resources.
-   */
-  private static class NativeReference {
-
-    /** Attaches this reference to an eager session */
-    private class EagerReference extends EagerSession.NativeReference {
-
-      EagerReference(EagerSession session, Tensor<?> tensor) {
-        super(session, tensor);
-      }
-
-      @Override
-      void delete() {
-        // Mark this eager reference as cleared since it has been deleted by the session
-        NativeReference.this.eagerRef = null;
-        NativeReference.this.release();
-      }
-    }
-
-    NativeReference(long tensorHandle) {
-      this.tensorHandle = tensorHandle;
-    }
-
-    void eager(EagerSession session, Tensor<?> tensor) {
-      if (eagerRef != null) {
-        throw new IllegalStateException("The tensor is already attached to an eager session");
-      }
-      eagerRef = new EagerReference(session, tensor);
-    }
-
-    synchronized void release() {
-      if (tensorHandle != 0L) {
-        // Clear any remaining eager reference to this tensor
-        if (eagerRef != null) {
-          eagerRef.clear();
-          eagerRef = null;
-        }
-        Tensor.delete(tensorHandle);
-        tensorHandle = 0L;
-      }
-    }
-
-    private long tensorHandle;
-    private EagerReference eagerRef;
   }
 
   private static HashMap<Class<?>, DataType> classDataTypes = new HashMap<>();

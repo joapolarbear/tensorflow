@@ -17,19 +17,18 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/platform/port.h"
 
-#include "absl/strings/str_cat.h"
 #include "tensorflow/stream_executor/lib/error.h"
+#include "tensorflow/stream_executor/lib/strcat.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 string PlatformKindString(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
       return "CUDA";
-    case PlatformKind::kROCm:
-      return "ROCm";
     case PlatformKind::kOpenCL:
       return "OpenCL";
     case PlatformKind::kHost:
@@ -37,7 +36,7 @@ string PlatformKindString(PlatformKind kind) {
     case PlatformKind::kMock:
       return "Mock";
     default:
-      return absl::StrCat("InvalidPlatformKind(", static_cast<int>(kind), ")");
+      return port::StrCat("InvalidPlatformKind(", static_cast<int>(kind), ")");
   }
 }
 
@@ -54,7 +53,6 @@ PlatformKind PlatformKindFromString(string kind) {
 bool PlatformIsRunnable(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
-    case PlatformKind::kROCm:
     case PlatformKind::kOpenCL:
     case PlatformKind::kHost:
       return true;
@@ -66,7 +64,6 @@ bool PlatformIsRunnable(PlatformKind kind) {
 bool PlatformIsRunnableOnDevice(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
-    case PlatformKind::kROCm:
     case PlatformKind::kOpenCL:
       return true;
     default:
@@ -87,17 +84,6 @@ StreamExecutorConfig::StreamExecutorConfig(int ordinal_in)
     : ordinal(ordinal_in), device_options(DeviceOptions::Default()) {}
 
 Platform::~Platform() {}
-
-bool Platform::Initialized() const { return true; }
-
-port::Status Platform::Initialize(
-    const std::map<string, string> &platform_options) {
-  if (!platform_options.empty()) {
-    return port::Status(port::error::UNIMPLEMENTED,
-                        "this platform does not support custom initialization");
-  }
-  return port::Status::OK();
-}
 
 port::Status Platform::ForceExecutorShutdown() {
   return port::Status(port::error::UNIMPLEMENTED,
@@ -138,4 +124,5 @@ port::Status Platform::EnablePeerAccess() {
   return port::Status::OK();
 }
 
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

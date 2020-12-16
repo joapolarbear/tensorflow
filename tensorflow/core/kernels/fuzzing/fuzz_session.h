@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_FUZZING_FUZZ_SESSION_H_
-#define TENSORFLOW_CORE_KERNELS_FUZZING_FUZZ_SESSION_H_
+#ifndef LEARNING_BRAIN_KERNELS_FUZZING_FUZZ_SESSION_H_
+#define LEARNING_BRAIN_KERNELS_FUZZING_FUZZ_SESSION_H_
 
 #include "tensorflow/cc/framework/scope.h"
 #include "tensorflow/core/graph/graph.h"
@@ -35,11 +35,12 @@ limitations under the License.
 #endif
 
 // Standard builder for hooking one placeholder to one op.
-#define SINGLE_INPUT_OP_BUILDER(dtype, opName)                          \
-  void BuildGraph(const Scope& scope) override {                        \
-    auto op_node =                                                      \
-        tensorflow::ops::Placeholder(scope.WithOpName("input"), dtype); \
-    (void)tensorflow::ops::opName(scope.WithOpName("output"), op_node); \
+#define SINGLE_INPUT_OP_BUILDER(dtype, opName)                           \
+  void BuildGraph(const Scope& scope) override {                         \
+    auto op_node =                                                       \
+        tensorflow::ops::Placeholder(scope.WithOpName("input1"), dtype); \
+    std::ignore =                                                        \
+        tensorflow::ops::opName(scope.WithOpName("output"), op_node);    \
   }
 
 namespace tensorflow {
@@ -61,7 +62,7 @@ namespace fuzzing {
 //   SINGLE_INPUT_OP_BUILDER(DT_INT8, Identity);
 //   void FuzzImpl(const uint8_t* data, size_t size) {
 //      ... convert data and size to a Tensor, pass it to:
-//      RunInputs({{"input", input_tensor}});
+//      RunOneInput(input_tensor);
 //
 class FuzzSession {
  public:
@@ -72,11 +73,11 @@ class FuzzSession {
   // By convention, the graph should have inputs named "input1", ...
   // "inputN", and one output node, named "output".
   // Users of FuzzSession should override this method to create their graph.
-  virtual void BuildGraph(const Scope& scope) = 0;
+  virtual void BuildGraph(const Scope& scope) {}
 
   // Implements the logic that converts an opaque byte buffer
   // from the fuzzer to Tensor inputs to the graph.  Users must override.
-  virtual void FuzzImpl(const uint8_t* data, size_t size) = 0;
+  virtual void FuzzImpl(const uint8_t* data, size_t size) {}
 
   // Initializes the FuzzSession.  Not safe for multithreading.
   // Separate init function because the call to virtual BuildGraphDef
@@ -107,18 +108,15 @@ class FuzzSession {
   }
 
   // Runs the TF session by pulling on the "output" node, attaching
-  // the supplied input_tensor to the input node(s), and discarding
+  // the supplied input_tensor to the "input1" node, and discarding
   // any returned output.
-  // Note: We are ignoring Status from Run here since fuzzers don't need to
-  // check it (as that will slow them down and printing/logging is useless).
-  void RunInputs(const std::vector<std::pair<string, Tensor> >& inputs) {
-    RunInputsWithStatus(inputs).IgnoreError();
+  Status RunOneInput(const Tensor& input_tensor) {
+    return session_->Run({{"input1", input_tensor}}, {}, {"output"}, nullptr);
   }
 
-  // Same as RunInputs but don't ignore status
-  Status RunInputsWithStatus(
-      const std::vector<std::pair<string, Tensor> >& inputs) {
-    return session_->Run(inputs, {}, {"output"}, nullptr);
+  Status RunTwoInputs(const Tensor& input1, const Tensor& input2) {
+    return session_->Run({{"input1", input1}, {"input2", input2}}, {},
+                         {"output"}, nullptr);
   }
 
   // Dispatches to FuzzImpl;  small amount of sugar to keep the code
@@ -145,13 +143,14 @@ class FuzzSession {
 class FuzzStringInputOp : public FuzzSession {
   void FuzzImpl(const uint8_t* data, size_t size) final {
     Tensor input_tensor(tensorflow::DT_STRING, TensorShape({}));
-    input_tensor.scalar<tstring>()() =
+    input_tensor.scalar<string>()() =
         string(reinterpret_cast<const char*>(data), size);
-    RunInputs({{"input", input_tensor}});
+    // TODO(b/32704451): Don't just ignore the ::tensorflow::Status object!
+    RunOneInput(input_tensor).IgnoreError();
   }
 };
 
 }  // end namespace fuzzing
 }  // end namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_FUZZING_FUZZ_SESSION_H_
+#endif  // LEARNING_BRAIN_KERNELS_FUZZING_FUZZ_SESSION_H_

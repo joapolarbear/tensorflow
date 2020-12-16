@@ -15,10 +15,9 @@ limitations under the License.
 
 // Null implementation of the Counter metric for mobile platforms.
 
-#ifndef TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_
-#define TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_
+#define THIRD_PARTY_TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_
 
-#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
@@ -54,8 +53,6 @@ class Counter {
     return &default_counter_cell_;
   }
 
-  Status GetStatus() { return Status::OK(); }
-
  private:
   Counter() {}
 
@@ -67,4 +64,4 @@ class Counter {
 }  // namespace monitoring
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CORE_LIB_MONITORING_MOBILE_COUNTER_H_

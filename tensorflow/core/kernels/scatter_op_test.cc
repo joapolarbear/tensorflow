@@ -28,7 +28,6 @@ limitations under the License.
 #include "tensorflow/core/kernels/ops_util.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/lib/random/simple_philox.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/platform/test_benchmark.h"
@@ -50,15 +49,15 @@ class ScatterUpdateOpTest : public OpsTestBase {
 
 TEST_F(ScatterUpdateOpTest, Simple_StringType) {
   MakeOp(DT_STRING_REF, DT_INT32);
-  AddInputFromArray<tstring>(TensorShape({1}), {"Brain"});
+  AddInputFromArray<string>(TensorShape({1}), {"Brain"});
   AddInputFromArray<int32>(TensorShape({1}), {0});
-  AddInputFromArray<tstring>(TensorShape({1}), {"TensorFlow"});
+  AddInputFromArray<string>(TensorShape({1}), {"TensorFlow"});
   TF_ASSERT_OK(RunOpKernel());
   // Check the new state of the input
   Tensor params_tensor = *mutable_input(0).tensor;
   Tensor expected(allocator(), DT_STRING, TensorShape({1}));
-  test::FillValues<tstring>(&expected, {"TensorFlow"});
-  test::ExpectTensorEqual<tstring>(expected, params_tensor);
+  test::FillValues<string>(&expected, {"TensorFlow"});
+  test::ExpectTensorEqual<string>(expected, params_tensor);
 }
 
 TEST_F(ScatterUpdateOpTest, Simple_BoolType) {
@@ -171,7 +170,7 @@ TEST_F(ScatterUpdateOpTest, Error_IndexOutOfRange) {
                            {100, 101, 102, 777, 778, 779, 10000, 10001, 10002});
   Status s = RunOpKernel();
   EXPECT_TRUE(
-      absl::StrContains(s.ToString(), "indices[2] = 99 is not in [0, 5)"))
+      StringPiece(s.ToString()).contains("indices[2] = 99 is not in [0, 5)"))
       << s;
 }
 
@@ -184,9 +183,9 @@ TEST_F(ScatterUpdateOpTest, Error_WrongDimsIndices) {
   AddInputFromArray<float>(TensorShape({3, 3}),
                            {100, 101, 102, 777, 778, 779, 10000, 10001, 10002});
   Status s = RunOpKernel();
-  EXPECT_TRUE(absl::StrContains(s.ToString(),
-                                "Must have updates.shape = indices.shape + "
-                                "params.shape[1:] or updates.shape = [], got "))
+  EXPECT_TRUE(StringPiece(s.ToString())
+                  .contains("Must have updates.shape = indices.shape + "
+                            "params.shape[1:], got "))
       << s;
 }
 
@@ -201,9 +200,9 @@ TEST_F(ScatterUpdateOpTest, Error_MismatchedParamsAndUpdateDimensions) {
       TensorShape({3, 4}),
       {100, 101, 102, 103, 777, 778, 779, 780, 10000, 10001, 10002, 10004});
   Status s = RunOpKernel();
-  EXPECT_TRUE(absl::StrContains(s.ToString(),
-                                "Must have updates.shape = indices.shape + "
-                                "params.shape[1:] or updates.shape = [], got "))
+  EXPECT_TRUE(StringPiece(s.ToString())
+                  .contains("Must have updates.shape = indices.shape + "
+                            "params.shape[1:], got "))
 
       << s;
 }
@@ -218,9 +217,9 @@ TEST_F(ScatterUpdateOpTest, Error_MismatchedIndicesAndUpdateDimensions) {
   AddInputFromArray<float>(TensorShape({2, 3}),
                            {100, 101, 102, 10000, 10001, 10002});
   Status s = RunOpKernel();
-  EXPECT_TRUE(absl::StrContains(s.ToString(),
-                                "Must have updates.shape = indices.shape + "
-                                "params.shape[1:] or updates.shape = [], got "))
+  EXPECT_TRUE(StringPiece(s.ToString())
+                  .contains("Must have updates.shape = indices.shape + "
+                            "params.shape[1:], got "))
       << s;
 }
 
@@ -301,20 +300,6 @@ static void BM_ScatterDivInt64(int iters, int embedding_size) {
   BM_ScatterHelper<int64>(iters, embedding_size, "ScatterDiv");
 }
 
-static void BM_ScatterMinInt32(int iters, int embedding_size) {
-  BM_ScatterHelper<int32>(iters, embedding_size, "ScatterMin");
-}
-static void BM_ScatterMinInt64(int iters, int embedding_size) {
-  BM_ScatterHelper<int64>(iters, embedding_size, "ScatterMin");
-}
-
-static void BM_ScatterMaxInt32(int iters, int embedding_size) {
-  BM_ScatterHelper<int32>(iters, embedding_size, "ScatterMax");
-}
-static void BM_ScatterMaxInt64(int iters, int embedding_size) {
-  BM_ScatterHelper<int64>(iters, embedding_size, "ScatterMax");
-}
-
 BENCHMARK(BM_ScatterUpdateInt32)
     ->Arg(1)
     ->Arg(10)
@@ -346,12 +331,6 @@ BENCHMARK(BM_ScatterMulInt64)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
 
 BENCHMARK(BM_ScatterDivInt32)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
 BENCHMARK(BM_ScatterDivInt64)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
-
-BENCHMARK(BM_ScatterMinInt32)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
-BENCHMARK(BM_ScatterMinInt64)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
-
-BENCHMARK(BM_ScatterMaxInt32)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
-BENCHMARK(BM_ScatterMaxInt64)->Arg(1)->Arg(10)->Arg(64)->Arg(256)->Arg(1024);
 
 }  // namespace
 }  // namespace tensorflow

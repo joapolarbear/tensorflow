@@ -1,6 +1,5 @@
 op {
   graph_op_name: "SqlDataset"
-  visibility: HIDDEN
   in_arg {
     name: "driver_name"
     description: <<END

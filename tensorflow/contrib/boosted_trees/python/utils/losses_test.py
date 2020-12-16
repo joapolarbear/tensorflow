@@ -45,7 +45,7 @@ class LossesTest(test_util.TensorFlowTestCase):
 
     eps = 0.2
 
-    with self.cached_session():
+    with self.test_session():
       predictions_tensor = constant_op.constant(
           prediction_logits, dtype=dtypes.float32)
       loss_for_positives, _ = losses.per_example_exp_loss(
@@ -84,7 +84,7 @@ class LossesTest(test_util.TensorFlowTestCase):
     predictions = np.array(
         [[0.123], [23.2], [233], [52], [3]], dtype=np.float32)
 
-    with self.cached_session():
+    with self.test_session():
       loss_tensor, _ = losses.per_example_squared_loss(labels, weights,
                                                        predictions)
 

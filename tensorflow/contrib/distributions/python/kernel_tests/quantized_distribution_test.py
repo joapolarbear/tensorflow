@@ -21,7 +21,6 @@ import numpy as np
 from scipy import stats
 from tensorflow.contrib import distributions as distributions_lib
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gradients_impl
@@ -39,7 +38,7 @@ class QuantizedDistributionTest(test.TestCase):
     self.assertTrue(np.isfinite(array).all())
 
   def testQuantizationOfUniformWithCutoffsHavingNoEffect(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       # The Quantized uniform with cutoffs == None divides the real line into:
       # R = ...(-1, 0](0, 1](1, 2](2, 3](3, 4]...
       # j = ...     0     1     2     3     4 ...
@@ -94,7 +93,7 @@ class QuantizedDistributionTest(test.TestCase):
         self.assertAllClose(3 / 3, cdf_5)
 
   def testQuantizationOfUniformWithCutoffsInTheMiddle(self):
-    with self.cached_session() as sess:
+    with self.test_session() as sess:
       # The uniform is supported on [-3, 3]
       # Consider partitions the real line in intervals
       # ...(-3, -2](-2, -1](-1, 0](0, 1](1, 2](2, 3] ...
@@ -132,7 +131,7 @@ class QuantizedDistributionTest(test.TestCase):
 
   def testQuantizationOfBatchOfUniforms(self):
     batch_shape = (5, 5)
-    with self.cached_session():
+    with self.test_session():
       # The uniforms are supported on [0, 10].  The qdist considers the
       # intervals
       # ... (0, 1](1, 2]...(9, 10]...
@@ -166,7 +165,7 @@ class QuantizedDistributionTest(test.TestCase):
 
   def testSamplingFromBatchOfNormals(self):
     batch_shape = (2,)
-    with self.cached_session():
+    with self.test_session():
       normal = distributions.Normal(
           loc=array_ops.zeros(
               batch_shape, dtype=dtypes.float32),
@@ -200,7 +199,7 @@ class QuantizedDistributionTest(test.TestCase):
     # pretend that the cdf F is a bijection, and hence F(X) is uniform.
     # Note that F cannot be bijection since it is constant between the
     # integers.  Hence, F(X) (see below) will not be uniform exactly.
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Exponential(rate=0.01))
       # X ~ QuantizedExponential
@@ -223,7 +222,7 @@ class QuantizedDistributionTest(test.TestCase):
     # it makes sure the bin edges are consistent.
 
     # Make an exponential with mean 5.
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Exponential(rate=0.2))
       # Standard error should be less than 1 / (2 * sqrt(n_samples))
@@ -244,7 +243,7 @@ class QuantizedDistributionTest(test.TestCase):
     batch_shape = (3, 3)
     mu = rng.randn(*batch_shape)
     sigma = rng.rand(*batch_shape) + 1.0
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(
               loc=mu, scale=sigma))
@@ -261,7 +260,7 @@ class QuantizedDistributionTest(test.TestCase):
     batch_shape = (3, 3)
     mu = rng.randn(*batch_shape)
     sigma = rng.rand(*batch_shape) + 1.0
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(
               loc=mu, scale=sigma))
@@ -276,7 +275,7 @@ class QuantizedDistributionTest(test.TestCase):
 
   def testNormalProbWithCutoffs(self):
     # At integer values, the result should be the same as the standard normal.
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(loc=0., scale=1.),
           low=-2.,
@@ -298,7 +297,7 @@ class QuantizedDistributionTest(test.TestCase):
 
   def testNormalLogProbWithCutoffs(self):
     # At integer values, the result should be the same as the standard normal.
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(loc=0., scale=1.),
           low=-2.,
@@ -336,14 +335,14 @@ class QuantizedDistributionTest(test.TestCase):
         x = np.arange(-100, 100, 2).astype(dtype)
         proba = qdist.log_prob(x)
         grads = gradients_impl.gradients(proba, [mu, sigma])
-        with self.session(graph=g):
+        with self.test_session(graph=g):
           variables.global_variables_initializer().run()
           self._assert_all_finite(proba.eval())
           self._assert_all_finite(grads[0].eval())
           self._assert_all_finite(grads[1].eval())
 
   def testProbAndGradGivesFiniteResultsForCommonEvents(self):
-    with self.cached_session():
+    with self.test_session():
       mu = variables.Variable(0.0, name="mu")
       sigma = variables.Variable(1.0, name="sigma")
       qdist = distributions.QuantizedDistribution(
@@ -361,18 +360,19 @@ class QuantizedDistributionTest(test.TestCase):
       self._assert_all_finite(grads[1].eval())
 
   def testLowerCutoffMustBeBelowUpperCutoffOrWeRaise(self):
-    with self.cached_session():
-      with self.assertRaisesWithPredicateMatch(errors.InvalidArgumentError,
-                                               "must be strictly less"):
-        _ = distributions.QuantizedDistribution(
-            distribution=distributions.Normal(loc=0., scale=1.),
-            low=1.,  # not strictly less than high.
-            high=1.,
-            validate_args=True)
-        # Error detected statically; no need for _.sample().eval()
+    with self.test_session():
+      qdist = distributions.QuantizedDistribution(
+          distribution=distributions.Normal(loc=0., scale=1.),
+          low=1.,  # not strictly less than high.
+          high=1.,
+          validate_args=True)
+
+      self.assertTrue(qdist.validate_args)  # Default is True.
+      with self.assertRaisesOpError("must be strictly less"):
+        qdist.sample().eval()
 
   def testCutoffsMustBeIntegerValuedIfValidateArgsTrue(self):
-    with self.cached_session():
+    with self.test_session():
       low = array_ops.placeholder(dtypes.float32)
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(loc=0., scale=1.),
@@ -385,7 +385,7 @@ class QuantizedDistributionTest(test.TestCase):
         qdist.sample().eval(feed_dict={low: 1.5})
 
   def testCutoffsCanBeFloatValuedIfValidateArgsFalse(self):
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(
               loc=0., scale=1., validate_args=False),
@@ -399,7 +399,7 @@ class QuantizedDistributionTest(test.TestCase):
 
   def testDtypeAndShapeInheritedFromBaseDist(self):
     batch_shape = (2, 3)
-    with self.cached_session():
+    with self.test_session():
       qdist = distributions.QuantizedDistribution(
           distribution=distributions.Normal(
               loc=array_ops.zeros(batch_shape),

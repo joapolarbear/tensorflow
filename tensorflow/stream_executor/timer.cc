@@ -21,7 +21,8 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/stream_executor.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 
 Timer::Timer(StreamExecutor *parent)
     : parent_(parent),
@@ -33,4 +34,5 @@ uint64 Timer::Microseconds() const { return implementation_->Microseconds(); }
 
 uint64 Timer::Nanoseconds() const { return implementation_->Nanoseconds(); }
 
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

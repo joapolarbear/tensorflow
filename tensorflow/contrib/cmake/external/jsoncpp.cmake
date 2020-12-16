@@ -23,11 +23,7 @@ set(jsoncpp_LIBRARIES ${jsoncpp_BUILD}/obj/so/libjsoncpp.so)
 set(jsoncpp_INCLUDES ${jsoncpp_BUILD})
 
 if(WIN32)
-  if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*")
-    set(jsoncpp_STATIC_LIBRARIES ${jsoncpp_BUILD}/$(Configuration)/jsoncpp.lib)
-  else()
-    set(jsoncpp_STATIC_LIBRARIES ${jsoncpp_BUILD}/jsoncpp.lib)
-  endif()
+  set(jsoncpp_STATIC_LIBRARIES ${jsoncpp_BUILD}/$(Configuration)/jsoncpp.lib)
 else()
   set(jsoncpp_STATIC_LIBRARIES ${jsoncpp_BUILD}/libjsoncpp.a)
 endif()
@@ -44,10 +40,13 @@ ExternalProject_Add(jsoncpp
     GIT_TAG ${jsoncpp_TAG}
     DOWNLOAD_DIR "${DOWNLOAD_LOCATION}"
     BUILD_IN_SOURCE 1
-    BUILD_BYPRODUCTS ${jsoncpp_STATIC_LIBRARIES}
     INSTALL_COMMAND ""
     CMAKE_CACHE_ARGS
-        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=${tensorflow_ENABLE_POSITION_INDEPENDENT_CODE}
+  	  if(tensorflow_ENABLE_POSITION_INDEPENDENT_CODE)
+  	      -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+  	  else()
+   	    	-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=OFF
+   	 endif()
         -DCMAKE_BUILD_TYPE:STRING=Release
         -DCMAKE_VERBOSE_MAKEFILE:BOOL=OFF
 )

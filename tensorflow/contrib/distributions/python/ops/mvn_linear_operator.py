@@ -27,7 +27,6 @@ from tensorflow.python.ops.distributions import kullback_leibler
 from tensorflow.python.ops.distributions import normal
 from tensorflow.python.ops.distributions import transformed_distribution
 from tensorflow.python.ops.linalg import linalg
-from tensorflow.python.util import deprecation
 
 
 __all__ = [
@@ -91,8 +90,7 @@ class MultivariateNormalLinearOperator(
   #### Examples
 
   ```python
-  import tensorflow_probability as tfp
-  tfd = tfp.distributions
+  tfd = tf.contrib.distributions
 
   # Initialize a single 3-variate Gaussian.
   mu = [1., 2, 3]
@@ -135,14 +133,6 @@ class MultivariateNormalLinearOperator(
 
   """
 
-  @deprecation.deprecated(
-      "2018-10-01",
-      "The TensorFlow Distributions library has moved to "
-      "TensorFlow Probability "
-      "(https://github.com/tensorflow/probability). You "
-      "should update all references to use `tfp.distributions` "
-      "instead of `tf.contrib.distributions`.",
-      warn_once=True)
   def __init__(self,
                loc=None,
                scale=None,
@@ -180,13 +170,13 @@ class MultivariateNormalLinearOperator(
       ValueError: if `scale` is unspecified.
       TypeError: if not `scale.dtype.is_floating`
     """
-    parameters = dict(locals())
+    parameters = locals()
     if scale is None:
       raise ValueError("Missing required `scale` parameter.")
     if not scale.dtype.is_floating:
       raise TypeError("`scale` parameter must have floating-point dtype.")
 
-    with ops.name_scope(name, values=[loc] + scale.graph_parents) as name:
+    with ops.name_scope(name, values=[loc] + scale.graph_parents):
       # Since expand_dims doesn't preserve constant-ness, we obtain the
       # non-dynamic value if possible.
       loc = ops.convert_to_tensor(loc, name="loc") if loc is not None else loc
@@ -276,14 +266,6 @@ class MultivariateNormalLinearOperator(
 
 @kullback_leibler.RegisterKL(MultivariateNormalLinearOperator,
                              MultivariateNormalLinearOperator)
-@deprecation.deprecated(
-    "2018-10-01",
-    "The TensorFlow Distributions library has moved to "
-    "TensorFlow Probability "
-    "(https://github.com/tensorflow/probability). You "
-    "should update all references to use `tfp.distributions` "
-    "instead of `tf.contrib.distributions`.",
-    warn_once=True)
 def _kl_brute_force(a, b, name=None):
   """Batched KL divergence `KL(a || b)` for multivariate Normals.
 

@@ -16,13 +16,13 @@ limitations under the License.
 // The algorithm for dynamic partition has the following steps:
 // 1. Let N be the size of partitions. We initialize a new vector indices_in
 //    with the values 0, 1, 2, ..., N-1.
-// 2. We apply gpuprim::DeviceRadixSort::SortPairs to the key - value pairs
-//    given by partitions and indices_in. This will result in two new vectors
+// 2. We apply cub::DeviceRadixSort::SortPairs to the key - value pairs given
+//    by partitions and indices_in. This will result in two new vectors
 //    partitions_out and indices_out, with partitions_out sorted.
 // 3. The first dimension of outputs[i] is equal to the number of i-values in
 //    partitions_out. We determine it in two steps:
-//    - apply gpuprim::DeviceReduce::ReduceByKey to count how many times each
-//      value appears in partitions_out,
+//    - apply cub::DeviceReduce::ReduceByKey to count how many times each value
+//      appears in partitions_out,
 //    - move the results to partition_count. This handles missing values
 //      (corresponding to empty parts).
 // 4. Because partition_count is on the GPU, we bring it asynchronously to
@@ -31,34 +31,24 @@ limitations under the License.
 //    This works, because for each interval of i-values, indices_out points
 //    to the slices which should form output[i].
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
-#if GOOGLE_CUDA
-#include "third_party/cub/device/device_radix_sort.cuh"
-#include "third_party/cub/device/device_reduce.cuh"
-#include "third_party/cub/iterator/constant_input_iterator.cuh"
-#include "third_party/cub/thread/thread_operators.cuh"
-#elif TENSORFLOW_USE_ROCM
-#include "external/rocprim_archive/hipcub/include/hipcub/hipcub.hpp"
-#endif
+#include "external/cub_archive/cub/device/device_radix_sort.cuh"
+#include "external/cub_archive/cub/device/device_reduce.cuh"
+#include "external/cub_archive/cub/iterator/constant_input_iterator.cuh"
+#include "external/cub_archive/cub/thread/thread_operators.cuh"
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
-#include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/fill_functor.h"
 #include "tensorflow/core/kernels/gather_functor_gpu.cu.h"
-#include "tensorflow/core/util/gpu_kernel_helper.h"
+#include "tensorflow/core/util/cuda_kernel_helper.h"
 #include "tensorflow/core/util/transform_output_iterator.h"
-
-#if GOOGLE_CUDA
-namespace gpuprim = ::cub;
-#elif TENSORFLOW_USE_ROCM
-namespace gpuprim = ::hipcub;
-#endif
 
 namespace tensorflow {
 
@@ -69,14 +59,14 @@ namespace {
 template <typename T>
 __global__ void RangeInitKernel(const T start, const T delta, const int32 size,
                                 T* out) {
-  GPU_1D_KERNEL_LOOP(i, size) { out[i] = start + i * delta; }
+  CUDA_1D_KERNEL_LOOP(i, size) { out[i] = start + i * delta; }
 }
 
 __global__ void MoveValuesKernel(const int32* keys, const int32* values,
                                  const int32* size, int32 out_size,
                                  int32* out) {
   int32 N = min(ldg(size), out_size);
-  GPU_1D_KERNEL_LOOP(i, N) {
+  CUDA_1D_KERNEL_LOOP(i, N) {
     int32 key = ldg(keys + i);
     int32 value = ldg(values + i);
     if (FastBoundsCheck(key, out_size)) out[key] = value;
@@ -88,10 +78,10 @@ __global__ void MoveValuesKernel(const int32* keys, const int32* values,
 template <typename T>
 void RangeInit(const GPUDevice& d, const T start, const T delta,
                const int32 size, typename TTypes<T>::Flat out) {
-  GpuLaunchConfig config = GetGpuLaunchConfig(size, d);
-  TF_CHECK_OK(GpuLaunchKernel(RangeInitKernel<T>, config.block_count,
-                              config.thread_per_block, 0, d.stream(), start,
-                              delta, size, out.data()));
+  CudaLaunchConfig config = GetCudaLaunchConfig(size, d);
+  RangeInitKernel<
+      T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+      start, delta, size, out.data());
 }
 
 // Given *num_runs pairs (key, value), this function moves the value
@@ -103,21 +93,21 @@ void MoveValues(const GPUDevice& d, int32* keys, int32* values, int32* num_runs,
   // This is valid for correct inputs, because then out_size >= *num_runs.
   // For wrong inputs, we may have out_size < *num_runs. In this case we will
   // only handle the first out_size values.
-  GpuLaunchConfig config = GetGpuLaunchConfig(out_size, d);
-  TF_CHECK_OK(GpuLaunchKernel(MoveValuesKernel, config.block_count,
-                              config.thread_per_block, 0, d.stream(), keys,
-                              values, num_runs, out_size, out));
+  CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
+  MoveValuesKernel<<<config.block_count, config.thread_per_block, 0,
+                     d.stream()>>>(keys, values, num_runs, out_size, out);
 }
 
 template <typename T>
 void CallGatherKernel(const GPUDevice& d, const T* params, const int32* indices,
                       T* out, int64 gather_dim_size, int64 indices_size,
                       int64 slice_size, int64 out_size) {
-  GpuLaunchConfig config = GetGpuLaunchConfig(out_size, d);
-  TF_CHECK_OK(GpuLaunchKernel(GatherOpKernel<T, int32, true>,
-                              config.block_count, config.thread_per_block, 0,
-                              d.stream(), params, indices, out, gather_dim_size,
-                              indices_size, slice_size, out_size));
+  CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
+  GatherOpKernel<
+      T, int32,
+      true><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+      params, indices, out, gather_dim_size, indices_size, slice_size,
+      out_size);
 }
 
 struct IdentityOp {
@@ -191,7 +181,7 @@ class BoundedOutputIterator
 // I + P + max(3N + R + P, O + N), where:
 // I - the size of the input
 // N - the size of the partitions tensor
-// R - the temporary storage used by gpuprim::RadixSort, about 2N
+// R - the temporary storage used by cub::RadixSort, about 2N
 // P - the number of partitions
 // O - the size of the output
 // So roughly the cost is I + P + max(5N, O + N).
@@ -241,10 +231,10 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
 
     OP_REQUIRES_ASYNC(
         c, TensorShapeUtils::StartsWith(data.shape(), partitions.shape()),
-        errors::InvalidArgument(
-            "data.shape must start with partitions.shape, ",
-            "got data.shape = ", data.shape().DebugString(),
-            ", partitions.shape = ", partitions.shape().DebugString()),
+        errors::InvalidArgument("data.shape must start with partitions.shape, ",
+                                "got data.shape = ", data.shape().DebugString(),
+                                ", partitions.shape = ",
+                                partitions.shape().DebugString()),
         done);
 
     Tensor partition_count;
@@ -255,9 +245,8 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
       AllocatorAttributes alloc_attr;
       alloc_attr.set_on_host(true);
       OP_REQUIRES_OK_ASYNC(
-          c,
-          c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
-                           &partition_count, alloc_attr),
+          c, c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
+                              &partition_count, alloc_attr),
           done);
       auto e_part_count = partition_count.flat<int32>();
       for (int i = 0; i < num_partitions_; i++) e_part_count(i) = 0;
@@ -270,9 +259,8 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
 
     // Prepare for counting.
     OP_REQUIRES_OK_ASYNC(
-        c,
-        c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
-                         &partition_count),
+        c, c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
+                            &partition_count),
         done);
     Tensor indices_out;
     // Count how many times each partition index occurs.
@@ -292,12 +280,11 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
     alloc_attr.set_on_host(true);
     alloc_attr.set_gpu_compatible(true);
     OP_REQUIRES_OK_ASYNC(
-        c,
-        c->allocate_temp(partition_count.dtype(), partition_count.shape(),
-                         &cpu_tensor, alloc_attr),
+        c, c->allocate_temp(partition_count.dtype(), partition_count.shape(),
+                            &cpu_tensor, alloc_attr),
         done);
-    se::DeviceMemoryBase wrapped(partition_count.flat<int32>().data(),
-                                 num_partitions_ * sizeof(int32));
+    perftools::gputools::DeviceMemoryBase wrapped(
+        partition_count.flat<int32>().data(), num_partitions_ * sizeof(int32));
     const bool status =
         stream
             ->ThenMemcpy(cpu_tensor.flat<int32>().data(), wrapped,
@@ -336,7 +323,7 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
                  Tensor* indices_out, DoneCallback done) {
     int32 N = partitions->NumElements();
     const GPUDevice& device = c->eigen_device<GPUDevice>();
-    const auto& cu_stream = GetGpuStream(c);
+    const cudaStream_t& cu_stream = GetCudaStream(c);
 
     // Initialize the indices_in tensor using the Range GPU kernel.
     RangeInit(device, 0, 1, N, indices_in->flat<int32>());
@@ -348,18 +335,17 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
     // Determine temporary device storage requirements.
     Tensor cub_temp_storage;
     size_t temp_storage_bytes = 0;
-    gpuprim::DeviceRadixSort::SortPairs(
+    cub::DeviceRadixSort::SortPairs(
         NULL, temp_storage_bytes, partitions_ptr, partitions_out_ptr,
         indices_in_ptr, indices_out_ptr, N, 0, sizeof(int32) * 8, cu_stream);
     // Allocate temporary storage.
     OP_REQUIRES_OK_ASYNC(
-        c,
-        c->allocate_temp(DT_INT8,
-                         TensorShape({static_cast<int64>(temp_storage_bytes)}),
-                         &cub_temp_storage),
+        c, c->allocate_temp(
+               DT_INT8, TensorShape({static_cast<int64>(temp_storage_bytes)}),
+               &cub_temp_storage),
         done);
     // Radix-sort the partition information.
-    gpuprim::DeviceRadixSort::SortPairs(
+    cub::DeviceRadixSort::SortPairs(
         cub_temp_storage.flat<int8>().data(), temp_storage_bytes,
         partitions_ptr, partitions_out_ptr, indices_in_ptr, indices_out_ptr, N,
         0, sizeof(int32) * 8, cu_stream);
@@ -369,7 +355,7 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
                          Tensor* partition_count, Tensor* indices_out,
                          DoneCallback done) {
     const GPUDevice& device = c->eigen_device<GPUDevice>();
-    const auto& cu_stream = GetGpuStream(c);
+    const cudaStream_t& cu_stream = GetCudaStream(c);
     int32 N = partitions->NumElements();
     Tensor indices_in;
     Tensor partitions_out;
@@ -390,9 +376,8 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
     zero_functor(device, partition_count->flat<int32>());
     // Allocate memory for aggregates_out.
     OP_REQUIRES_OK_ASYNC(
-        c,
-        c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
-                         &aggregates_out),
+        c, c->allocate_temp(DT_INT32, TensorShape({num_partitions_}),
+                            &aggregates_out),
         done);
     // Obtain the pointers to inner buffers.
     int32* keys_in_ptr = partitions_out.flat<int32>().data();
@@ -406,14 +391,8 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
     BoundedOutputIterator aggregates_out_it(aggregates_out_ptr, id_op,
                                             num_partitions_);
 
-#if GOOGLE_CUDA
     cub::ConstantInputIterator<int32> values_in(1);
-#elif TENSORFLOW_USE_ROCM
-    using ConstantInputIterator =
-        ::rocprim::constant_iterator<int32, ptrdiff_t>;
-    ConstantInputIterator values_in(1);
-#endif
-    gpuprim::Sum reduction_op;
+    cub::Sum reduction_op;
 
     // Allocate space on GPU for the number of runs. This is required by CUB.
     Tensor num_runs;
@@ -424,24 +403,23 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
     // Determine temporary device storage requirements
     Tensor cub_temp_storage;
     size_t temp_storage_bytes = 0;
-    gpuprim::DeviceReduce::ReduceByKey(
-        NULL, temp_storage_bytes, keys_in_ptr, unique_out_it, values_in,
-        aggregates_out_it, num_runs_ptr, reduction_op, N, cu_stream);
+    cub::DeviceReduce::ReduceByKey(NULL, temp_storage_bytes, keys_in_ptr,
+                                   unique_out_it, values_in, aggregates_out_it,
+                                   num_runs_ptr, reduction_op, N, cu_stream);
     // Allocate temporary storage.
     OP_REQUIRES_OK_ASYNC(
-        c,
-        c->allocate_temp(DT_INT8,
-                         TensorShape({static_cast<int64>(temp_storage_bytes)}),
-                         &cub_temp_storage),
+        c, c->allocate_temp(
+               DT_INT8, TensorShape({static_cast<int64>(temp_storage_bytes)}),
+               &cub_temp_storage),
         done);
     // Run reduce-by-key. The effect is that we count how many times
     // each index appears in partitions. The distinct indices are stored
     // in unique_out, while the count is stored in aggregates_out.
     // The total number of distinct indices is stored in num_runs.
-    gpuprim::DeviceReduce::ReduceByKey(
-        cub_temp_storage.flat<int8>().data(), temp_storage_bytes, keys_in_ptr,
-        unique_out_it, values_in, aggregates_out_it, num_runs_ptr, reduction_op,
-        N, cu_stream);
+    cub::DeviceReduce::ReduceByKey(cub_temp_storage.flat<int8>().data(),
+                                   temp_storage_bytes, keys_in_ptr,
+                                   unique_out_it, values_in, aggregates_out_it,
+                                   num_runs_ptr, reduction_op, N, cu_stream);
     // We are not done yet. unique_out only contains the indices that appeared
     // at least once in partitions. We move each value from aggregates_out
     // to the corresponding position in partition_count. This will handle
@@ -484,4 +462,4 @@ TF_CALL_complex128(REGISTER_DYNAMIC_PARTITION_GPU);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

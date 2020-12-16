@@ -18,22 +18,21 @@ limitations under the License.
 #include "tensorflow/compiler/tf2xla/kernels/index_ops.h"
 
 #include "tensorflow/compiler/tf2xla/type_util.h"
+#include "tensorflow/compiler/tf2xla/xla_helpers.h"
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
 #include "tensorflow/compiler/xla/client/lib/arithmetic.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/kernel_def_builder.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/kernels/bounds_check.h"
 
 namespace tensorflow {
 XlaArgMinMaxOp::XlaArgMinMaxOp(OpKernelConstruction* ctx, bool is_min)
-    : XlaOpKernel(ctx),
-      is_min_(is_min),
-      is_gpu_(ctx->device_type().type_string() == DEVICE_GPU_XLA_JIT) {}
+    : XlaOpKernel(ctx), is_min_(is_min) {}
 
 void XlaArgMinMaxOp::Compile(XlaOpKernelContext* ctx) {
   const TensorShape input_shape = ctx->InputShape(0);
@@ -61,24 +60,19 @@ void XlaArgMinMaxOp::Compile(XlaOpKernelContext* ctx) {
                               input_shape.DebugString()));
 
   DataType index_type = output_type(0);
-  xla::PrimitiveType index_xla_type;
-  OP_REQUIRES_OK(ctx, DataTypeToPrimitiveType(index_type, &index_xla_type));
 
-  xla::XlaOp input = ctx->Input(0);
-  xla::XlaOp output;
-  // One pass ArgMin/ArgMax is slow on GPUs.
+  xla::ComputationBuilder* b = ctx->builder();
+  xla::ComputationDataHandle input = ctx->Input(0);
+
+  xla::ComputationDataHandle output;
   if (is_min_) {
-    if (is_gpu_) {
-      output = xla::ArgMinTwoPass(input, index_xla_type, axis);
-    } else {
-      output = xla::ArgMin(input, index_xla_type, axis);
-    }
+    OP_REQUIRES_OK(ctx,
+                   XlaHelpers::ArgMin(b, ctx, input, input_shape, input_type(0),
+                                      index_type, axis, &output));
   } else {
-    if (is_gpu_) {
-      output = xla::ArgMaxTwoPass(input, index_xla_type, axis);
-    } else {
-      output = xla::ArgMax(input, index_xla_type, axis);
-    }
+    OP_REQUIRES_OK(ctx,
+                   XlaHelpers::ArgMax(b, ctx, input, input_shape, input_type(0),
+                                      index_type, axis, &output));
   }
 
   ctx->SetOutput(0, output);
@@ -86,9 +80,7 @@ void XlaArgMinMaxOp::Compile(XlaOpKernelContext* ctx) {
 
 XlaArgMaxOp::XlaArgMaxOp(OpKernelConstruction* ctx)
     : XlaArgMinMaxOp(ctx, /*is_min=*/false) {}
-REGISTER_XLA_OP(Name("ArgMax")
-                    .CompileTimeConstantInput("dimension"),
-                XlaArgMaxOp);
+REGISTER_XLA_OP(Name("ArgMax").Device(DEVICE_GPU_XLA_JIT), XlaArgMaxOp);
 
 namespace {
 
@@ -98,8 +90,7 @@ class XlaArgMinOp : public XlaArgMinMaxOp {
 };
 XlaArgMinOp::XlaArgMinOp(OpKernelConstruction* ctx)
     : XlaArgMinMaxOp(ctx, /*is_min=*/true) {}
-REGISTER_XLA_OP(Name("ArgMin").CompileTimeConstantInput("dimension"),
-                XlaArgMinOp);
+REGISTER_XLA_OP(Name("ArgMin"), XlaArgMinOp);
 
 }  // namespace
 }  // namespace tensorflow

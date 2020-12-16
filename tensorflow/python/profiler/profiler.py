@@ -30,7 +30,7 @@ from tensorflow.python.profiler.model_analyzer import Profiler
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 from tensorflow.python.profiler.tfprof_logger import write_op_log
 
-from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.util.all_util import remove_undocumented
 
 
 _allowed_symbols = [
@@ -48,8 +48,10 @@ _allowed_symbols.extend([
     'OpLogProto',
 ])
 
-# Export protos
-tf_export(v1=['profiler.GraphNodeProto'])(GraphNodeProto)
-tf_export(v1=['profiler.MultiGraphNodeProto'])(MultiGraphNodeProto)
-tf_export(v1=['profiler.AdviceProto'])(AdviceProto)
-tf_export(v1=['profiler.OpLogProto'])(OpLogProto)
+remove_undocumented(__name__, _allowed_symbols, [
+    Profiler,
+    profile,
+    ProfileOptionBuilder,
+    advise,
+    write_op_log,
+])

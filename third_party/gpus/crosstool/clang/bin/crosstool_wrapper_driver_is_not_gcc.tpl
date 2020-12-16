@@ -95,7 +95,6 @@ def GetHostCompilerOptions(argv):
   parser.add_argument('--sysroot', nargs=1)
   parser.add_argument('-g', nargs='*', action='append')
   parser.add_argument('-fno-canonical-system-headers', action='store_true')
-  parser.add_argument('-no-canonical-prefixes', action='store_true')
 
   args, _ = parser.parse_known_args(argv)
 
@@ -109,8 +108,6 @@ def GetHostCompilerOptions(argv):
     opts += ' -g' + ' -g'.join(sum(args.g, []))
   if args.fno_canonical_system_headers:
     opts += ' -fno-canonical-system-headers'
-  if args.no_canonical_prefixes:
-    opts += ' -no-canonical-prefixes'
   if args.sysroot:
     opts += ' --sysroot ' + args.sysroot[0]
 
@@ -178,11 +175,6 @@ def InvokeNvcc(argv, log=False):
   # any other reliable way to just get the list of source files to be compiled.
   src_files = GetOptionValue(argv, 'c')
 
-  # Pass -w through from host to nvcc, but don't do anything fancier with
-  # warnings-related flags, since they're not necessarily the same across
-  # compilers.
-  warning_options = ' -w' if '-w' in argv else ''
-
   if len(src_files) == 0:
     return 1
   if len(out_file) != 1:
@@ -213,7 +205,6 @@ def InvokeNvcc(argv, log=False):
   nvccopts += defines
   nvccopts += std_options
   nvccopts += m_options
-  nvccopts += warning_options
 
   if depfiles:
     # Generate the dependency file

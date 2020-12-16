@@ -13,12 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Linear Estimators (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Linear Estimators."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -31,13 +26,14 @@ import six
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import deprecated
 from tensorflow.contrib.framework import deprecated_arg_values
+from tensorflow.python.training import training_util
 from tensorflow.contrib.layers.python.layers import feature_column
 from tensorflow.contrib.learn.python.learn.estimators import estimator
 from tensorflow.contrib.learn.python.learn.estimators import head as head_lib
 from tensorflow.contrib.learn.python.learn.estimators import prediction_key
 from tensorflow.contrib.learn.python.learn.utils import export
 from tensorflow.contrib.linear_optimizer.python import sdca_optimizer
-from tensorflow.python.feature_column import feature_column_lib as fc_core
+from tensorflow.python.feature_column import feature_column as fc_core
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
@@ -50,7 +46,6 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import training as train
-from tensorflow.python.training import training_util
 
 
 # The default learning rate of 0.2 is a historical artifact of the initial
@@ -155,8 +150,8 @@ def _linear_model_fn(features, labels, mode, params, config=None):
       parent_scope,
       values=tuple(six.itervalues(features)),
       partitioner=partitioner) as scope:
-    if all(isinstance(fc, feature_column._FeatureColumn)  # pylint: disable=protected-access
-           for fc in feature_columns):
+    if all([isinstance(fc, feature_column._FeatureColumn)  # pylint: disable=protected-access
+            for fc in feature_columns]):
       if joint_weights:
         layer_fn = layers.joint_weighted_sum_from_feature_columns
       else:
@@ -243,10 +238,8 @@ def sdca_model_fn(features, labels, mode, params):
 
   parent_scope = "linear"
 
-  with variable_scope.variable_scope(
-      values=features.values(),
-      name_or_scope=parent_scope,
-      partitioner=optimizer.partitioner) as scope:
+  with variable_scope.variable_op_scope(
+      features.values(), parent_scope) as scope:
     features = features.copy()
     features.update(layers.transform_features(features, feature_columns))
     logits, columns_to_variables, bias = (
@@ -312,10 +305,6 @@ class _SdcaUpdateWeightsHook(session_run_hook.SessionRunHook):
 class LinearClassifier(estimator.Estimator):
   """Linear classifier model.
 
-  THIS CLASS IS DEPRECATED. See
-  [contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-  for general migration instructions.
-
   Train a linear model to classify instances into one of multiple possible
   classes. When number of possible classes is 2, this is binary classification.
 
@@ -334,7 +323,7 @@ class LinearClassifier(estimator.Estimator):
   # Or estimator using the FTRL optimizer with regularization.
   estimator = LinearClassifier(
       feature_columns=[sparse_column_a, sparse_feature_a_x_sparse_feature_b],
-      optimizer=tf.compat.v1.train.FtrlOptimizer(
+      optimizer=tf.train.FtrlOptimizer(
         learning_rate=0.1,
         l1_regularization_strength=0.001
       ))
@@ -636,10 +625,6 @@ class LinearClassifier(estimator.Estimator):
 class LinearRegressor(estimator.Estimator):
   """Linear regressor model.
 
-  THIS CLASS IS DEPRECATED. See
-  [contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-  for general migration instructions.
-
   Train a linear regression model to predict label value given observation of
   feature values.
 
@@ -874,10 +859,6 @@ class LinearRegressor(estimator.Estimator):
 
 class LinearEstimator(estimator.Estimator):
   """Linear model with user specified head.
-
-  THIS CLASS IS DEPRECATED. See
-  [contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-  for general migration instructions.
 
   Train a generalized linear model to predict label value given observation of
   feature values.

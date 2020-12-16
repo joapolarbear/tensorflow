@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <stddef.h>  // for NULL
 
-#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -36,21 +35,10 @@ EventsWriter::EventsWriter(const string& file_prefix)
       file_prefix_(file_prefix),
       num_outstanding_events_(0) {}
 
-EventsWriter::~EventsWriter() {
-  Close().IgnoreError();  // Autoclose in destructor.
-}
-
-Status EventsWriter::Init() { return InitWithSuffix(""); }
-
-Status EventsWriter::InitWithSuffix(const string& suffix) {
-  file_suffix_ = suffix;
-  return InitIfNeeded();
-}
-
-Status EventsWriter::InitIfNeeded() {
+bool EventsWriter::InitIfNeeded() {
   if (recordio_writer_ != nullptr) {
     CHECK(!filename_.empty());
-    if (!FileStillExists().ok()) {
+    if (FileHasDisappeared()) {
       // Warn user of data loss and let .reset() below do basic cleanup.
       if (num_outstanding_events_ > 0) {
         LOG(WARNING) << "Re-initialization, attempting to open a new file, "
@@ -58,7 +46,7 @@ Status EventsWriter::InitIfNeeded() {
       }
     } else {
       // No-op: File is present and writer is initialized.
-      return Status::OK();
+      return true;
     }
   }
 
@@ -69,16 +57,15 @@ Status EventsWriter::InitIfNeeded() {
                       static_cast<int64>(time_in_seconds),
                       port::Hostname().c_str(), file_suffix_.c_str());
 
-  // Reset recordio_writer (which has a reference to recordio_file_) so final
-  // Flush() and Close() call have access to recordio_file_.
-  recordio_writer_.reset();
-
-  TF_RETURN_WITH_CONTEXT_IF_ERROR(
-      env_->NewWritableFile(filename_, &recordio_file_),
-      "Creating writable file ", filename_);
+  Status s = env_->NewWritableFile(filename_, &recordio_file_);
+  if (!s.ok()) {
+    LOG(ERROR) << "Could not open events file: " << filename_ << ": " << s;
+    return false;
+  }
   recordio_writer_.reset(new io::RecordWriter(recordio_file_.get()));
   if (recordio_writer_ == nullptr) {
-    return errors::Unknown("Could not create record writer");
+    LOG(ERROR) << "Could not create record writer";
+    return false;
   }
   num_outstanding_events_ = 0;
   VLOG(1) << "Successfully opened events file: " << filename_;
@@ -90,21 +77,21 @@ Status EventsWriter::InitIfNeeded() {
     event.set_wall_time(time_in_seconds);
     event.set_file_version(strings::StrCat(kVersionPrefix, kCurrentVersion));
     WriteEvent(event);
-    TF_RETURN_WITH_CONTEXT_IF_ERROR(Flush(), "Flushing first event.");
+    Flush();
   }
-  return Status::OK();
+  return true;
 }
 
 string EventsWriter::FileName() {
   if (filename_.empty()) {
-    InitIfNeeded().IgnoreError();
+    InitIfNeeded();
   }
   return filename_;
 }
 
 void EventsWriter::WriteSerializedEvent(StringPiece event_str) {
   if (recordio_writer_ == nullptr) {
-    if (!InitIfNeeded().ok()) {
+    if (!InitIfNeeded()) {
       LOG(ERROR) << "Write failed because file could not be opened.";
       return;
     }
@@ -121,54 +108,60 @@ void EventsWriter::WriteEvent(const Event& event) {
   WriteSerializedEvent(record);
 }
 
-Status EventsWriter::Flush() {
-  if (num_outstanding_events_ == 0) return Status::OK();
+bool EventsWriter::Flush() {
+  if (num_outstanding_events_ == 0) return true;
   CHECK(recordio_file_ != nullptr) << "Unexpected NULL file";
 
-  TF_RETURN_WITH_CONTEXT_IF_ERROR(recordio_writer_->Flush(), "Failed to flush ",
-                                  num_outstanding_events_, " events to ",
-                                  filename_);
-  TF_RETURN_WITH_CONTEXT_IF_ERROR(recordio_file_->Sync(), "Failed to sync ",
-                                  num_outstanding_events_, " events to ",
-                                  filename_);
+  if (!recordio_writer_->Flush().ok()) {
+    LOG(ERROR) << "Failed to flush " << num_outstanding_events_ << " events to "
+               << filename_;
+    return false;
+  }
 
-  // The FileStillExists() condition is necessary because
-  // recordio_writer_->Sync() can return OK even if the underlying
+  // The FileHasDisappeared() condition is necessary because
+  // recordio_writer_->Sync() can return true even if the underlying
   // file has been deleted.  EventWriter.FileDeletionBeforeWriting
   // demonstrates this and will fail if the FileHasDisappeared()
   // condition is removed.
   // Also, we deliberately attempt to Sync() before checking for a
   // disappearing file, in case for some file system File::Exists() is
   // false after File::Open() but before File::Sync().
-  TF_RETURN_WITH_CONTEXT_IF_ERROR(FileStillExists(), "Failed to flush ",
-                                  num_outstanding_events_, " events to ",
-                                  filename_);
+  if (!recordio_file_->Flush().ok() || !recordio_file_->Sync().ok() ||
+      FileHasDisappeared()) {
+    LOG(ERROR) << "Failed to flush " << num_outstanding_events_ << " events to "
+               << filename_;
+    return false;
+  }
   VLOG(1) << "Wrote " << num_outstanding_events_ << " events to disk.";
   num_outstanding_events_ = 0;
-  return Status::OK();
+  return true;
 }
 
-Status EventsWriter::Close() {
-  Status status = Flush();
+bool EventsWriter::Close() {
+  bool return_value = Flush();
   if (recordio_file_ != nullptr) {
-    Status close_status = recordio_file_->Close();
-    if (!close_status.ok()) {
-      status = close_status;
+    Status s = recordio_file_->Close();
+    if (!s.ok()) {
+      LOG(ERROR) << "Error when closing previous event file: " << filename_
+                 << ": " << s;
+      return_value = false;
     }
     recordio_writer_.reset(nullptr);
     recordio_file_.reset(nullptr);
   }
   num_outstanding_events_ = 0;
-  return status;
+  return return_value;
 }
 
-Status EventsWriter::FileStillExists() {
+bool EventsWriter::FileHasDisappeared() {
   if (env_->FileExists(filename_).ok()) {
-    return Status::OK();
+    return false;
+  } else {
+    // This can happen even with non-null recordio_writer_ if some other
+    // process has removed the file.
+    LOG(ERROR) << "The events file " << filename_ << " has disappeared.";
+    return true;
   }
-  // This can happen even with non-null recordio_writer_ if some other
-  // process has removed the file.
-  return errors::Unknown("The events file ", filename_, " has disappeared.");
 }
 
 }  // namespace tensorflow

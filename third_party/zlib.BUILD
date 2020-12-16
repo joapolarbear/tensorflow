@@ -2,6 +2,18 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])  # BSD/MIT-like license (for zlib)
 
+config_setting(
+    name = "windows",
+    values = {"cpu": "x64_windows"},
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "windows_msvc",
+    values = {"cpu": "x64_windows_msvc"},
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "zlib",
     srcs = [
@@ -33,7 +45,8 @@ cc_library(
     ],
     hdrs = ["zlib.h"],
     copts = select({
-        "@org_tensorflow//tensorflow:windows": [],
+        ":windows": [],
+        ":windows_msvc": [],
         "//conditions:default": [
             "-Wno-shift-negative-value",
             "-DZ_HAVE_UNISTD_H",

@@ -22,7 +22,6 @@ limitations under the License.
 #include "tensorflow/core/framework/op_def_builder.h"
 #include "tensorflow/core/framework/op_def_util.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/protobuf.h"
 #include "tensorflow/core/platform/test.h"
 
@@ -48,7 +47,7 @@ class NodeDefBuilderTest : public ::testing::Test {
 
   // Calls Finalize() and verifies it returns success and the result matches
   // expectations.
-  void ExpectSuccess(NodeDefBuilder& builder,  // NOLINT
+  void ExpectSuccess(const NodeDefBuilder& builder,
                      DataTypeSlice expected_in_types,
                      DataTypeSlice expected_out_types, StringPiece proto) {
     NodeDef node_def;
@@ -76,29 +75,27 @@ class NodeDefBuilderTest : public ::testing::Test {
 
   // Calls Finalize() and verifies it returns an error.
   // Each message must appear as a substring of the error.
-  void ExpectFailures(NodeDefBuilder& builder,  // NOLINT
+  void ExpectFailures(const NodeDefBuilder& builder,
                       const std::vector<string>& messages) {
     NodeDef node_def;
     Status status = builder.Finalize(&node_def);
     EXPECT_FALSE(status.ok()) << SummarizeNodeDef(node_def);
     if (status.ok()) return;
     for (const string& message : messages) {
-      EXPECT_TRUE(absl::StrContains(status.error_message(), message))
+      EXPECT_TRUE(StringPiece(status.error_message()).contains(message))
           << status << ", " << message;
     }
   }
 
   // Calls Finalize() and verifies it returns an error.
   // Message must appear as a substring of the error.
-  void ExpectFailure(NodeDefBuilder& builder,  // NOLINT
-                     const string& message) {
+  void ExpectFailure(const NodeDefBuilder& builder, const string& message) {
     ExpectFailures(builder, {message});
   }
 
   // Like ExpectFailure(), except that the error can come from
   // ValidateNodeDef().
-  void ExpectInvalid(NodeDefBuilder& builder,  // NOLINT
-                     const string& message) {
+  void ExpectInvalid(const NodeDefBuilder& builder, const string& message) {
     NodeDef node_def;
     Status status = builder.Finalize(&node_def);
     if (status.ok()) {
@@ -106,7 +103,7 @@ class NodeDefBuilderTest : public ::testing::Test {
     }
     EXPECT_FALSE(status.ok()) << SummarizeNodeDef(node_def);
     if (status.ok()) return;
-    EXPECT_TRUE(absl::StrContains(status.error_message(), message))
+    EXPECT_TRUE(StringPiece(status.error_message()).contains(message))
         << "Actual error: " << status.error_message()
         << "\nDoes not contain: " << message;
   }
@@ -237,7 +234,7 @@ TEST_F(NodeDefBuilderTest, Polymorphic) {
       op: "Polymorphic" input: "a"
       attr { key: "T" value { type: DT_BOOL } } )proto");
 
-  // Conflicting Attr()
+  // Conficting Attr()
   ExpectFailure(Builder().Input(FakeInput(DT_BOOL)).Attr("T", DT_STRING),
                 "Inconsistent values for attr 'T' DT_BOOL vs. DT_STRING while");
 

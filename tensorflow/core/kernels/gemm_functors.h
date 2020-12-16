@@ -24,9 +24,6 @@ limitations under the License.
 #error "EIGEN_USE_THREADS must be enabled by all .cc files including this."
 #endif  // EIGEN_USE_THREADS
 
-#ifndef TENSORFLOW_CORE_KERNELS_GEMM_FUNCTORS_H_
-#define TENSORFLOW_CORE_KERNELS_GEMM_FUNCTORS_H_
-
 #include <string.h>
 #include <map>
 #include <vector>
@@ -35,10 +32,6 @@ limitations under the License.
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_types.h"
-
-#if defined(TENSORFLOW_USE_CUSTOM_CONTRACTION_KERNEL)
-#include "tensorflow/core/kernels/eigen_contraction_kernel.h"
-#endif
 
 // Apple provides an optimized BLAS library that is better than Eigen for their
 // devices, so use that if possible.
@@ -123,5 +116,3 @@ class FastGemmFunctor<float, float, float> {
   }
 };
 #endif  // USE_CBLAS_GEMM
-
-#endif  // TENSORFLOW_CORE_KERNELS_GEMM_FUNCTORS_H_

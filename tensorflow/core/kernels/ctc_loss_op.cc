@@ -15,11 +15,10 @@ limitations under the License.
 
 // See docs in ../ops/ctc_ops.cc.
 
-#include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/util/ctc/ctc_loss_calculator.h"
@@ -27,13 +26,14 @@ limitations under the License.
 
 namespace tensorflow {
 
-template <typename T>
+typedef Eigen::ThreadPoolDevice CPUDevice;
+
 class CTCLossOp : public OpKernel {
-  typedef Eigen::Map<
-      const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> >
+  typedef Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic,
+                                         Eigen::RowMajor> >
       InputMap;
   typedef Eigen::Map<
-      Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> >
+      Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> >
       OutputMap;
 
  public:
@@ -100,23 +100,21 @@ class CTCLossOp : public OpKernel {
 
     TensorShape labels_shape({batch_size, max_label_len});
     std::vector<int64> order{0, 1};
-    sparse::SparseTensor labels_sp;
-    OP_REQUIRES_OK(
-        ctx, sparse::SparseTensor::Create(*labels_indices, *labels_values,
-                                          labels_shape, order, &labels_sp));
+    sparse::SparseTensor labels_sp(*labels_indices, *labels_values,
+                                   labels_shape, order);
 
     Status labels_sp_valid = labels_sp.IndicesValid();
     OP_REQUIRES(ctx, labels_sp_valid.ok(),
                 errors::InvalidArgument("label SparseTensor is not valid: ",
                                         labels_sp_valid.error_message()));
 
-    typename ctc::CTCLossCalculator<T>::LabelSequences labels_t(batch_size);
+    ctc::CTCLossCalculator::LabelSequences labels_t(batch_size);
     for (const auto& g : labels_sp.group({0})) {  // iterate by batch
       const int64 batch_indices = g.group()[0];
       OP_REQUIRES(ctx, FastBoundsCheck(batch_indices, batch_size),
                   errors::InvalidArgument("labels batch index must be between ",
-                                          0, " and ", batch_size,
-                                          " but saw: ", batch_indices));
+                                          0, " and ", batch_size, " but saw: ",
+                                          batch_indices));
 
       auto values = g.values<int32>();
       std::vector<int>* b_values = &labels_t[batch_indices];
@@ -137,13 +135,13 @@ class CTCLossOp : public OpKernel {
 
     Tensor* loss = nullptr;
     OP_REQUIRES_OK(ctx, ctx->allocate_output("loss", seq_len->shape(), &loss));
-    auto loss_t = loss->vec<T>();
+    auto loss_t = loss->vec<float>();
 
     Tensor* gradient;
     OP_REQUIRES_OK(ctx,
                    ctx->allocate_output("gradient", inputs_shape, &gradient));
-    auto gradient_t = gradient->tensor<T, 3>();
-    auto inputs_t = inputs->tensor<T, 3>();
+    auto gradient_t = gradient->tensor<float, 3>();
+    auto inputs_t = inputs->tensor<float, 3>();
     std::vector<OutputMap> gradient_list_t;
     std::vector<InputMap> input_list_t;
 
@@ -158,7 +156,7 @@ class CTCLossOp : public OpKernel {
     gradient_t.setZero();
 
     // Assumption: the blank index is num_classes - 1
-    ctc::CTCLossCalculator<T> ctc_loss_calculator(num_classes - 1, 0);
+    ctc::CTCLossCalculator ctc_loss_calculator(num_classes - 1, 0);
     DeviceBase::CpuWorkerThreads workers =
         *ctx->device()->tensorflow_cpu_worker_threads();
     OP_REQUIRES_OK(ctx, ctc_loss_calculator.CalculateLoss(
@@ -173,17 +171,9 @@ class CTCLossOp : public OpKernel {
   bool ctc_merge_repeated_;
   bool ignore_longer_outputs_than_inputs_;
 
-  TF_DISALLOW_COPY_AND_ASSIGN(CTCLossOp<T>);
+  TF_DISALLOW_COPY_AND_ASSIGN(CTCLossOp);
 };
 
-#define REGISTER_CPU(T)                                          \
-  REGISTER_KERNEL_BUILDER(                                       \
-      Name("CTCLoss").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
-      CTCLossOp<T>);
-
-REGISTER_CPU(float);
-REGISTER_CPU(double);
-
-#undef REGISTER_CPU
+REGISTER_KERNEL_BUILDER(Name("CTCLoss").Device(DEVICE_CPU), CTCLossOp);
 
 }  // end namespace tensorflow

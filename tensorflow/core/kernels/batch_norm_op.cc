@@ -30,7 +30,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
 #ifdef TENSORFLOW_USE_SYCL
 typedef Eigen::SyclDevice SYCLDevice;
-#endif  // TENSORFLOW_USE_SYCL
+#endif // TENSORFLOW_USE_SYCL
 
 template <typename Device, typename T>
 class BatchNormOp : public OpKernel {
@@ -127,12 +127,8 @@ class BatchNormGradOp : public OpKernel {
     OP_REQUIRES_OK(context, context->forward_input_or_allocate_output(
                                 {2}, 2, var.shape(), &dv));
     Tensor* db = nullptr;
-    if (scale_after_normalization_) {
-      OP_REQUIRES_OK(context, context->allocate_output(3, mean.shape(), &db));
-    } else {
-      OP_REQUIRES_OK(context, context->forward_input_or_allocate_output(
-                                  {3}, 3, mean.shape(), &db));
-    }
+    OP_REQUIRES_OK(context, context->forward_input_or_allocate_output(
+                                {3}, 3, mean.shape(), &db));
     Tensor* dg = nullptr;
     OP_REQUIRES_OK(context, context->allocate_output(4, gamma.shape(), &dg));
 
@@ -175,7 +171,7 @@ TF_CALL_float(REGISTER_KERNEL);
 TF_CALL_double(REGISTER_KERNEL);
 #undef REGISTER_KERNEL
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
 #define DECLARE_GPU_SPEC(T)                                                  \
@@ -206,7 +202,7 @@ TF_CALL_half(REGISTER_GPU_KERNEL);
 TF_CALL_float(REGISTER_GPU_KERNEL);
 #undef REGISTER_GPU_KERNEL
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #if TENSORFLOW_USE_SYCL
 #define REGISTER_KERNEL(T)                                         \
@@ -231,7 +227,7 @@ TF_CALL_float(REGISTER_KERNEL);
 TF_CALL_double(REGISTER_KERNEL);
 #undef REGISTER_KERNEL
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
 #define DECLARE_GPU_SPEC(T)                                                \
@@ -265,7 +261,7 @@ TF_CALL_half(REGISTER_GPU_KERNEL);
 TF_CALL_float(REGISTER_GPU_KERNEL);
 #undef REGISTER_GPU_KERNEL
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #if TENSORFLOW_USE_SYCL
 #define REGISTER_KERNEL(T)                                             \

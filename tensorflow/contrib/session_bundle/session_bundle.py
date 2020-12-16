@@ -64,12 +64,11 @@ def load_session_bundle_from_path(export_dir,
 
   Args:
     export_dir: the directory that contains files exported by exporter.
-    target: The execution engine to connect to. See target in
-      tf.compat.v1.Session()
+    target: The execution engine to connect to. See target in tf.Session()
     config: A ConfigProto proto with configuration options. See config in
-      tf.compat.v1.Session()
+    tf.Session()
     meta_graph_def: optional object of type MetaGraphDef. If this object is
-      present, then it is used instead of parsing MetaGraphDef from export_dir.
+    present, then it is used instead of parsing MetaGraphDef from export_dir.
 
   Returns:
     session: a tensorflow session created from the variable files.

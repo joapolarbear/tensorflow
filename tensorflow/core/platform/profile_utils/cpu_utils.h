@@ -14,8 +14,8 @@ limitations under the License.
 ==============================================================================*/
 // This class is designed to get accurate profile for programs.
 
-#ifndef TENSORFLOW_CORE_PLATFORM_PROFILE_UTILS_CPU_UTILS_H_
-#define TENSORFLOW_CORE_PLATFORM_PROFILE_UTILS_CPU_UTILS_H_
+#ifndef TENSORFLOW_PLATFORM_PROFILEUTILS_CPU_UTILS_H__
+#define TENSORFLOW_PLATFORM_PROFILEUTILS_CPU_UTILS_H__
 
 #include <chrono>
 #include <memory>
@@ -26,10 +26,6 @@ limitations under the License.
 
 #if defined(ARMV6) || defined(__ARM_ARCH_7A__)
 #include <sys/time.h>
-#endif
-
-#if defined(_WIN32)
-#include <intrin.h>
 #endif
 
 namespace tensorflow {
@@ -46,7 +42,7 @@ namespace profile_utils {
 class CpuUtils {
  public:
   // Constant for invalid frequency.
-  // This value is returned when the frequency is not obtained somehow.
+  // This value is returned when the furequency is not obtained somehow.
   static constexpr int64 INVALID_FREQUENCY = -1;
   static constexpr uint64 DUMMY_CYCLE_CLOCK = 1;
 
@@ -59,18 +55,11 @@ class CpuUtils {
 #if defined(__ANDROID__)
     return GetCpuUtilsHelperSingletonInstance().GetCurrentClockCycle();
 // ----------------------------------------------------------------
-#elif defined(_WIN32)
-    return __rdtsc();
-// ----------------------------------------------------------------
 #elif defined(__x86_64__) || defined(__amd64__)
     uint64_t high, low;
     __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
     return (high << 32) | low;
 // ----------------------------------------------------------------
-#elif defined(__aarch64__) && defined(TARGET_OS_IOS)
-    // On iOS, we are not able to access the cntvct_el0 register.
-    // As a temporary build fix, we will just return the dummy cycle clock.
-    return DUMMY_CYCLE_CLOCK
 #elif defined(__aarch64__)
     // System timer of ARMv8 runs at a different frequency than the CPU's.
     // The frequency is fixed, typically in the range 1-50MHz.  It can because
@@ -105,18 +94,16 @@ class CpuUtils {
 #endif
   }
 
-// Return cycle counter frequency.
-// As this method caches the cpu frequency internally,
-// the first call will incur overhead, but not subsequent calls.
-#if (defined(__powerpc__) ||                                             \
-     defined(__ppc__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)) || \
-    (defined(__s390x__))
-  static uint64 GetCycleCounterFrequency();
-#else
-  static int64 GetCycleCounterFrequency();
-#endif
+  // Return cycle counter frequency.
+  // As this method caches the cpu frequency internally,
+  // the first call will incur overhead, but not subsequent calls.
+  #if (defined(__powerpc__) || defined(__ppc__) && ( __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)) || (defined(__s390x__))
+     static uint64 GetCycleCounterFrequency();
+  #else
+     static int64 GetCycleCounterFrequency();
+  #endif
 
-  // Return micro second per each clock
+  // Return micro secound per each clock
   // As this method caches the cpu frequency internally,
   // the first call will incur overhead, but not subsequent calls.
   static double GetMicroSecPerClock();
@@ -168,4 +155,4 @@ class CpuUtils {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_PLATFORM_PROFILE_UTILS_CPU_UTILS_H_
+#endif  // TENSORFLOW_PLATFORM_PROFILEUTILS_CPU_UTILS_H__

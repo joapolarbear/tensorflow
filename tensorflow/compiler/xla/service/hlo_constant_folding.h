@@ -23,9 +23,9 @@ namespace xla {
 
 // A pass which performs constant folding in order to avoid unnecessary
 // computation on constants.
-class HloConstantFolding : public HloModulePass {
+class HloConstantFolding : public HloPassInterface {
  public:
-  absl::string_view name() const override { return "constant_folding"; }
+  tensorflow::StringPiece name() const override { return "constant_folding"; }
 
   // Run constant folding operations on the given module. Returns whether the
   // module was changed (constant expressions folded).

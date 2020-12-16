@@ -16,7 +16,6 @@ limitations under the License.
 // See docs in ../ops/data_flow_ops.cc.
 
 #include <limits.h>
-
 #include <vector>
 
 #include "tensorflow/core/common_runtime/device.h"
@@ -43,11 +42,7 @@ class GetSessionHandleOp : public OpKernel {
 
   void Compute(OpKernelContext* ctx) override {
     const Tensor& val = ctx->input(0);
-    auto session_state = ctx->session_state();
-    OP_REQUIRES(ctx, session_state != nullptr,
-                errors::FailedPrecondition(
-                    "GetSessionHandle called on null session state"));
-    int64 id = session_state->GetNewId();
+    int64 id = ctx->session_state()->GetNewId();
     TensorStore::TensorAndKey tk{val, id, requested_device()};
     OP_REQUIRES_OK(ctx, ctx->tensor_store()->AddTensor(name(), tk));
 
@@ -62,7 +57,7 @@ class GetSessionHandleOp : public OpKernel {
       handle->scalar<ResourceHandle>()() = resource_handle;
     } else {
       // Legacy behavior in V1.
-      handle->flat<tstring>().setConstant(tk.GetHandle(name()));
+      handle->flat<string>().setConstant(tk.GetHandle(name()));
     }
   }
 
@@ -115,7 +110,7 @@ class GetSessionTensorOp : public OpKernel {
 
   void Compute(OpKernelContext* ctx) override {
     const Tensor& handle = ctx->input(0);
-    const string& name = handle.scalar<tstring>()();
+    const string& name = handle.scalar<string>()();
     Tensor val;
     OP_REQUIRES_OK(ctx, ctx->session_state()->GetTensor(name, &val));
     ctx->set_output(0, val);
@@ -149,7 +144,7 @@ REGISTER_GPU_KERNEL(bool);
 TF_CALL_NUMBER_TYPES(REGISTER_SYCL_KERNEL);
 REGISTER_SYCL_KERNEL(bool);
 #undef REGISTER_SYCL_KERNEL
-#endif  // TENSORFLOW_USE_SYCL
+#endif // TENSORFLOW_USE_SYCL
 
 class DeleteSessionTensorOp : public OpKernel {
  public:
@@ -158,7 +153,7 @@ class DeleteSessionTensorOp : public OpKernel {
 
   void Compute(OpKernelContext* ctx) override {
     const Tensor& handle = ctx->input(0);
-    const string& name = handle.scalar<tstring>()();
+    const string& name = handle.scalar<string>()();
     OP_REQUIRES_OK(ctx, ctx->session_state()->DeleteTensor(name));
   }
 

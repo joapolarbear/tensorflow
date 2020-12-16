@@ -76,7 +76,7 @@ class MatrixSolveOp : public LinearAlgebraOp<Scalar> {
                      MatrixMaps* outputs) final {
     const ConstMatrixMap& matrix = inputs[0];
     const ConstMatrixMap& rhs = inputs[1];
-    if (matrix.rows() == 0 || matrix.cols() == 0 || rhs.cols() == 0) {
+    if (matrix.rows() == 0 || rhs.cols() == 0) {
       // To be consistent with the MatrixInverse op, we define the solution for
       // an empty set of equation as the empty matrix.
       return;
@@ -162,7 +162,7 @@ class MatrixSolveOpGpu : public AsyncOpKernel {
 
     // To be consistent with the MatrixInverse op, we define the solution for
     // an empty set of equations as the empty matrix.
-    if (input.NumElements() == 0 || rhs.NumElements() == 0) {
+    if (rhs.NumElements() == 0) {
       done();
       return;
     }
@@ -214,12 +214,9 @@ class MatrixSolveOpGpu : public AsyncOpKernel {
     auto input_copy_ptrs = solver->GetScratchSpace<uint8>(
         sizeof(Scalar*) * batch_size, "input_copt_ptrs",
         /* on_host */ true);
-    const int kMaxMatrixSizeToBatchSizeRatio = 128;
-    const bool use_batched_solver =
-        n <= kMaxMatrixSizeToBatchSizeRatio * batch_size;
-    if (use_batched_solver) {
-      // For small matrices or large batch sizes, we use the batched interface
-      // from cuBlas.
+    if (n / batch_size <= 128) {
+      // For small matrices or large batch sizes, we use the batched
+      // interface from cuBlas.
       const Scalar** input_copy_ptrs_base =
           reinterpret_cast<const Scalar**>(input_copy_ptrs.mutable_data());
       for (int batch = 0; batch < batch_size; ++batch) {
@@ -233,8 +230,8 @@ class MatrixSolveOpGpu : public AsyncOpKernel {
                                &dev_info.back(), batch_size),
           done);
     } else {
-      // For small batch sizes or large matrices, we use the non-batched
-      // interface from cuSolver, which is much faster for large matrices.
+      // For small batch sizes we use the non-batched interface from cuSolver,
+      // which is much faster for large matrices.
       dev_info.push_back(solver->GetDeviceLapackInfo(batch_size, "getrf"));
       for (int batch = 0; batch < batch_size; ++batch) {
         OP_REQUIRES_OK_ASYNC(
@@ -282,7 +279,11 @@ class MatrixSolveOpGpu : public AsyncOpKernel {
         /* on_host */ true);
     auto transposed_rhs_reshaped =
         transposed_rhs.template flat_inner_dims<Scalar, 3>();
-    if (use_batched_solver) {
+    // TODO(rmlarsen): Enable the following branch when I figure
+    // out why it causes a segfault.
+    if (false && n / batch_size <= 128) {
+      dev_info.push_back(
+          solver->GetDeviceLapackInfo(batch_size, "GetrsBatched"));
       const Scalar** input_copy_ptrs_base =
           reinterpret_cast<const Scalar**>(input_copy_ptr_array.mutable_data());
       const Scalar** transposed_rhs_ptrs_base =
@@ -292,19 +293,12 @@ class MatrixSolveOpGpu : public AsyncOpKernel {
         input_copy_ptrs_base[batch] = &input_copy_reshaped(batch, 0, 0);
         transposed_rhs_ptrs_base[batch] = &transposed_rhs_reshaped(batch, 0, 0);
       }
-      int host_info = 0;
       OP_REQUIRES_OK_ASYNC(
           context,
           solver->GetrsBatched(adjoint_ ? CUBLAS_OP_C : CUBLAS_OP_T, n, nrhs,
                                input_copy_ptrs_base, n, pivots_mat.data(),
-                               transposed_rhs_ptrs_base, n, &host_info,
+                               transposed_rhs_ptrs_base, n, &dev_info.back(),
                                batch_size),
-          done);
-      OP_REQUIRES_ASYNC(
-          context, host_info == 0,
-          errors::InvalidArgument("The ", -host_info,
-                                  "'th argument to cublas*getrsBatched had "
-                                  "an illegal value."),
           done);
     } else {
       dev_info.push_back(solver->GetDeviceLapackInfo(batch_size, "getrs"));

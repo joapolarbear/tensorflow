@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CONTRIB_GDR_GDR_RENDEZVOUS_MGR_H_
-#define TENSORFLOW_CONTRIB_GDR_GDR_RENDEZVOUS_MGR_H_
+#ifndef GDR_RENDEZVOUS_MGR_H_
+#define GDR_RENDEZVOUS_MGR_H_
 
 #include "tensorflow/contrib/gdr/gdr_memory_manager.h"
 #include "tensorflow/core/distributed_runtime/base_rendezvous_mgr.h"
@@ -39,4 +39,4 @@ class GdrRendezvousMgr : public BaseRendezvousMgr {
 
 }  // end namespace tensorflow
 
-#endif  // TENSORFLOW_CONTRIB_GDR_GDR_RENDEZVOUS_MGR_H_
+#endif  // GDR_RENDEZVOUS_MGR_H_

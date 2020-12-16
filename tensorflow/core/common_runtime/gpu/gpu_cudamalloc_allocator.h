@@ -13,13 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_COMMON_RUNTIME_GPU_GPU_CUDAMALLOC_ALLOCATOR_H_
-#define TENSORFLOW_CORE_COMMON_RUNTIME_GPU_GPU_CUDAMALLOC_ALLOCATOR_H_
+#ifndef TENSORFLOW_COMMON_RUNTIME_GPU_GPU_CUDA_MALLOC_ALLOCATOR_H_
+#define TENSORFLOW_COMMON_RUNTIME_GPU_GPU_CUDA_MALLOC_ALLOCATOR_H_
 
 #include <memory>
 
-#include "tensorflow/core/common_runtime/gpu/gpu_id.h"
-#include "tensorflow/core/framework/allocator.h"
+#include "tensorflow/core/common_runtime/visitable_allocator.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/platform/types.h"
@@ -29,25 +28,25 @@ namespace tensorflow {
 // An allocator that wraps a GPU allocator and adds debugging
 // functionality that verifies that users do not write outside their
 // allocated memory.
-class GPUcudaMallocAllocator : public Allocator {
+class GPUcudaMallocAllocator : public VisitableAllocator {
  public:
-  explicit GPUcudaMallocAllocator(Allocator* allocator,
-                                  PlatformGpuId platform_gpu_id);
+  explicit GPUcudaMallocAllocator(VisitableAllocator* allocator, int device_id);
   ~GPUcudaMallocAllocator() override;
   string Name() override { return "gpu_debug"; }
   void* AllocateRaw(size_t alignment, size_t num_bytes) override;
   void DeallocateRaw(void* ptr) override;
-  bool TracksAllocationSizes() const override;
-  absl::optional<AllocatorStats> GetStats() override;
+  void AddAllocVisitor(Visitor visitor) override;
+  void AddFreeVisitor(Visitor visitor) override;
+  bool TracksAllocationSizes() override;
 
  private:
-  Allocator* base_allocator_ = nullptr;  // owned
+  VisitableAllocator* base_allocator_ = nullptr;  // owned
 
-  se::StreamExecutor* stream_exec_;  // Not owned.
+  perftools::gputools::StreamExecutor* stream_exec_;  // Not owned.
 
   TF_DISALLOW_COPY_AND_ASSIGN(GPUcudaMallocAllocator);
 };
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_COMMON_RUNTIME_GPU_GPU_CUDAMALLOC_ALLOCATOR_H_
+#endif  // TENSORFLOW_COMMON_RUNTIME_GPU_GPU_CUDAMALLOC_ALLOCATOR_H_

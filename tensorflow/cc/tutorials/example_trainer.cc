@@ -24,7 +24,6 @@ limitations under the License.
 #include "tensorflow/core/graph/default_device.h"
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/lib/core/threadpool.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/stringprintf.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/platform/logging.h"
@@ -167,7 +166,7 @@ namespace {
 
 bool ParseInt32Flag(tensorflow::StringPiece arg, tensorflow::StringPiece flag,
                     int32* dst) {
-  if (absl::ConsumePrefix(&arg, flag) && absl::ConsumePrefix(&arg, "=")) {
+  if (arg.Consume(flag) && arg.Consume("=")) {
     char extra;
     return (sscanf(arg.data(), "%d%c", dst, &extra) == 1);
   }
@@ -177,7 +176,7 @@ bool ParseInt32Flag(tensorflow::StringPiece arg, tensorflow::StringPiece flag,
 
 bool ParseBoolFlag(tensorflow::StringPiece arg, tensorflow::StringPiece flag,
                    bool* dst) {
-  if (absl::ConsumePrefix(&arg, flag)) {
+  if (arg.Consume(flag)) {
     if (arg.empty()) {
       *dst = true;
       return true;

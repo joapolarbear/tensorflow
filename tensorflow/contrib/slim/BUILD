@@ -1,14 +1,13 @@
 # Description:
 #   Contains the Slim library, including common neural networks and examples.
 
-load("//tensorflow:tensorflow.bzl", "py_test")
-
-package(
-    default_visibility = ["//tensorflow:__subpackages__"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:__subpackages__"])
+
+load("//tensorflow:tensorflow.bzl", "py_test")
 
 py_library(
     name = "evaluation",
@@ -24,7 +23,6 @@ py_library(
 py_test(
     name = "evaluation_test",
     srcs = ["python/slim/evaluation_test.py"],
-    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":evaluation",
@@ -72,7 +70,6 @@ py_library(
 py_test(
     name = "learning_test",
     srcs = ["python/slim/learning_test.py"],
-    python_version = "PY2",
     srcs_version = "PY2AND3",
     tags = ["manual"],
     deps = [
@@ -171,7 +168,6 @@ py_library(
 py_test(
     name = "summaries_test",
     srcs = ["python/slim/summaries_test.py"],
-    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":summaries",
@@ -181,4 +177,16 @@ py_test(
         "//tensorflow/python:platform",
         "//tensorflow/python:summary",
     ],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

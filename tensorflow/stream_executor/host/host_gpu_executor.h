@@ -28,7 +28,8 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor.h"
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace host {
 
 // An implementation of StreamExecutor that does no communication or interaction
@@ -50,19 +51,19 @@ class HostExecutor : public internal::StreamExecutorInterface {
     return port::Status::OK();
   }
 
-  port::Status GetKernel(const MultiKernelLoaderSpec &spec,
-                         KernelBase *kernel) override {
-    return port::UnimplementedError("Not Implemented");
+  bool GetKernel(const MultiKernelLoaderSpec &spec,
+                 KernelBase *kernel) override {
+    return false;
   }
-  port::Status Launch(Stream *stream, const ThreadDim &thread_dims,
-                      const BlockDim &block_dims, const KernelBase &kernel,
-                      const KernelArgsArrayBase &args) override {
-    return port::UnimplementedError("Not Implemented");
+  bool Launch(Stream *stream, const ThreadDim &thread_dims,
+              const BlockDim &block_dims, const KernelBase &kernel,
+              const KernelArgsArrayBase &args) override {
+    return false;
   }
 
   void *Allocate(uint64 size) override;
-  void *GetSubBuffer(DeviceMemoryBase *parent, uint64 offset_bytes,
-                     uint64 size_bytes) override;
+  void *AllocateSubBuffer(DeviceMemoryBase *mem, uint64 offset_bytes,
+                          uint64 size_bytes) override;
   void Deallocate(DeviceMemoryBase *mem) override;
 
   void *HostMemoryAllocate(uint64 size) override { return new char[size]; }
@@ -77,7 +78,7 @@ class HostExecutor : public internal::StreamExecutorInterface {
   bool Memcpy(Stream *stream, DeviceMemoryBase *gpu_dst, const void *host_src,
               uint64 size) override;
   bool MemcpyDeviceToDevice(Stream *stream, DeviceMemoryBase *gpu_dst,
-                            const DeviceMemoryBase &gpu_src,
+                            const DeviceMemoryBase &host_src,
                             uint64 size) override;
 
   bool MemZero(Stream *stream, DeviceMemoryBase *location,
@@ -88,7 +89,7 @@ class HostExecutor : public internal::StreamExecutorInterface {
                 uint64 size) override;
 
   // No "synchronize all activity" implemented for this platform at the moment.
-  bool SynchronizeAllActivity() override { return true; }
+  bool SynchronizeAllActivity() override { return false; }
   bool SynchronousMemZero(DeviceMemoryBase *location, uint64 size) override;
 
   bool SynchronousMemSet(DeviceMemoryBase *location, int value,
@@ -103,14 +104,27 @@ class HostExecutor : public internal::StreamExecutorInterface {
                                                const DeviceMemoryBase &gpu_src,
                                                uint64 size) override;
 
-  bool HostCallback(Stream *stream,
-                    std::function<port::Status()> callback) override;
+  bool HostCallback(Stream *stream, std::function<void()> callback) override;
 
-  port::Status AllocateEvent(Event *event) override;
-  port::Status DeallocateEvent(Event *event) override;
-  port::Status RecordEvent(Stream *stream, Event *event) override;
-  port::Status WaitForEvent(Stream *stream, Event *event) override;
-  Event::Status PollForEventStatus(Event *event) override;
+  port::Status AllocateEvent(Event *event) override {
+    return port::Status{port::error::UNIMPLEMENTED, ""};
+  }
+
+  port::Status DeallocateEvent(Event *event) override {
+    return port::Status{port::error::UNIMPLEMENTED, ""};
+  }
+
+  port::Status RecordEvent(Stream *stream, Event *event) override {
+    return port::Status{port::error::UNIMPLEMENTED, ""};
+  }
+
+  port::Status WaitForEvent(Stream *stream, Event *event) override {
+    return port::Status{port::error::UNIMPLEMENTED, ""};
+  }
+
+  Event::Status PollForEventStatus(Event *event) override {
+    return Event::Status::kError;
+  }
 
   bool AllocateStream(Stream *stream) override;
   void DeallocateStream(Stream *stream) override;
@@ -133,13 +147,7 @@ class HostExecutor : public internal::StreamExecutorInterface {
     return false;
   }
 
-  port::StatusOr<std::unique_ptr<DeviceDescription>> CreateDeviceDescription()
-      const override {
-    return CreateDeviceDescription(0);
-  }
-
-  static port::StatusOr<std::unique_ptr<DeviceDescription>>
-  CreateDeviceDescription(int device_ordinal);
+  DeviceDescription *PopulateDeviceDescription() const override;
 
   port::Status EnablePeerAccessTo(StreamExecutorInterface *other) override {
     return port::Status::OK();
@@ -160,7 +168,7 @@ class HostExecutor : public internal::StreamExecutorInterface {
         "Shared memory configuration is unsupported for host "
         "executors."};
     LOG(INFO) << error_msg;
-    return port::Status(port::error::UNIMPLEMENTED, error_msg);
+    return port::Status{port::error::UNIMPLEMENTED, error_msg};
   }
 
   bool SupportsBlas() const override;
@@ -176,7 +184,10 @@ class HostExecutor : public internal::StreamExecutorInterface {
   rng::RngSupport *CreateRng() override;
 
   std::unique_ptr<internal::EventInterface> CreateEventImplementation()
-      override;
+      override {
+    LOG(WARNING) << "Events not currently supported by HostExecutor.";
+    return nullptr;
+  }
 
   std::unique_ptr<internal::KernelInterface> CreateKernelImplementation()
       override {
@@ -192,13 +203,14 @@ class HostExecutor : public internal::StreamExecutorInterface {
     return std::unique_ptr<internal::TimerInterface>(new HostTimer());
   }
 
-  void *GpuContextHack() override { return nullptr; }
+  void *CudaContextHack() override { return nullptr; }
 
  private:
   const PluginConfig plugin_config_;
 };
 
 }  // namespace host
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_HOST_HOST_GPU_EXECUTOR_H_

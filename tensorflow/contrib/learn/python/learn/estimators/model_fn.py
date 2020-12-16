@@ -13,12 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Classes and methods related to model_fn (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Classes and methods related to model_fn."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -42,13 +37,10 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.training import session_run_hook
-from tensorflow.python.util.deprecation import deprecated
 
 
 class ModeKeys(object):
-  """Standard names for model modes (deprecated).
-
-  THIS CLASS IS DEPRECATED.
+  """Standard names for model modes.
 
   The following standard keys are defined:
 
@@ -73,16 +65,8 @@ class ModelFnOps(
         'output_alternatives', 'training_chief_hooks', 'training_hooks',
         'scaffold', 'mode'
     ])):
-  """Ops returned from a model_fn.
+  """Ops returned from a model_fn."""
 
-  THIS CLASS IS DEPRECATED. See
-  [contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-  for general migration instructions.
-  """
-
-  @deprecated(None, 'When switching to tf.estimator.Estimator, use '
-              'tf.estimator.EstimatorSpec. You can use the `estimator_spec`'
-              ' method to create an equivalent one.')
   def __new__(cls,
               mode,
               predictions=None,
@@ -131,7 +115,7 @@ class ModelFnOps(
         run on the chief worker during training.
       training_hooks: A list of `SessionRunHook` objects that will be run on
         all workers during training.
-      scaffold: A `tf.compat.v1.train.Scaffold` object that can be used to set
+      scaffold: A `tf.train.Scaffold` object that can be used to set
         initialization, saver, and more to be used in training.
 
     Returns:
@@ -162,7 +146,7 @@ class ModelFnOps(
       loss_shape = loss.get_shape()
       if loss_shape.num_elements() not in (None, 1):
         raise ValueError('Loss must be scalar: %s.' % loss)
-      if not loss_shape.is_compatible_with(tensor_shape.TensorShape([])):
+      if not loss_shape.is_compatible_with(tensor_shape.scalar()):
         loss = array_ops.reshape(loss, [])
 
     # Validate predictions.
@@ -219,8 +203,8 @@ class ModelFnOps(
         used if a Servo request does not explicitly mention which head to infer
         on. Pass the key of the output alternative here that you want to
         designate as default. A separate ExportOutpout for this default head
-        will be added to the export_outputs dict with the special key
-        saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY, unless there is
+        wil be added to the export_outputs dict with the special key
+        signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY, unless there is
         already an enry in output_alternatives with this special key.
 
     Returns:

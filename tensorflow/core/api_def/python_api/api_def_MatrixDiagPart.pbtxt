@@ -1,4 +1,9 @@
 op {
   graph_op_name: "MatrixDiagPart"
-  visibility: HIDDEN
+  endpoint {
+    name: "linalg.diag_part"
+  }
+  endpoint {
+    name: "matrix_diag_part"
+  }
 }

@@ -13,7 +13,13 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Tensor Handle Operations."""
+"""Tensor Handle Operations. See the @{$python/session_ops} guide.
+
+@@get_session_handle
+@@get_session_handle_v2
+@@get_session_tensor
+@@delete_session_tensor
+"""
 
 # pylint: disable=g-bad-name
 from __future__ import absolute_import
@@ -30,7 +36,6 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gen_data_flow_ops
 from tensorflow.python.util import compat
-from tensorflow.python.util.tf_export import tf_export
 
 
 def encode_resource_handle(resource_handle):
@@ -136,7 +141,6 @@ class TensorHandle(object):
     return feeder.op.name + ";" + TensorHandle._get_reader_key(handle)
 
 
-@tf_export(v1=["get_session_handle"])
 def get_session_handle(data, name=None):
   """Return the handle of `data`.
 
@@ -162,10 +166,10 @@ def get_session_handle(data, name=None):
 
   ```python
   c = tf.multiply(a, b)
-  h = tf.compat.v1.get_session_handle(c)
+  h = tf.get_session_handle(c)
   h = sess.run(h)
 
-  p, a = tf.compat.v1.get_session_tensor(h.handle, tf.float32)
+  p, a = tf.get_session_tensor(h.handle, tf.float32)
   b = tf.multiply(a, 10)
   c = sess.run(b, feed_dict={p: h.handle})
   ```
@@ -176,10 +180,9 @@ def get_session_handle(data, name=None):
 
   # Colocate this operation with data.
   with ops.colocate_with(data):
-    return gen_data_flow_ops.get_session_handle(data, name=name)
+    return gen_data_flow_ops._get_session_handle(data, name=name)  # pylint: disable=protected-access
 
 
-@tf_export(v1=["get_session_tensor"])
 def get_session_tensor(handle, dtype, name=None):
   """Get the tensor of type `dtype` by feeding a tensor handle.
 
@@ -203,10 +206,10 @@ def get_session_tensor(handle, dtype, name=None):
 
   ```python
   c = tf.multiply(a, b)
-  h = tf.compat.v1.get_session_handle(c)
+  h = tf.get_session_handle(c)
   h = sess.run(h)
 
-  p, a = tf.compat.v1.get_session_tensor(h.handle, tf.float32)
+  p, a = tf.get_session_tensor(h.handle, tf.float32)
   b = tf.multiply(a, 10)
   c = sess.run(b, feed_dict={p: h.handle})
   ```
@@ -216,11 +219,10 @@ def get_session_tensor(handle, dtype, name=None):
   with ops.device(handle_device):
     holder = array_ops.placeholder(dtypes.string)
     _register_handle_feeder(holder.graph, holder, dtype)
-    tensor = gen_data_flow_ops.get_session_tensor(holder, dtype, name=name)
+    tensor = gen_data_flow_ops._get_session_tensor(holder, dtype, name=name)
   return (holder, tensor)
 
 
-@tf_export(v1=["delete_session_tensor"])
 def delete_session_tensor(handle, name=None):
   """Delete the tensor for the given tensor handle.
 
@@ -240,7 +242,7 @@ def delete_session_tensor(handle, name=None):
   handle_device = TensorHandle._get_device_name(handle)
   with ops.device(handle_device):
     holder = array_ops.placeholder(dtypes.string)
-    deleter = gen_data_flow_ops.delete_session_tensor(holder, name=name)
+    deleter = gen_data_flow_ops._delete_session_tensor(holder, name=name)
   return (holder, deleter)
 
 
@@ -262,7 +264,7 @@ def _get_handle_reader(graph, handle, dtype):
     with graph.as_default(), graph.device(handle_device):
       holder = array_ops.placeholder(dtypes.string)
       _register_handle_feeder(holder.graph, holder, dtype)
-      reader = gen_data_flow_ops.get_session_tensor(holder, dtype)
+      reader = gen_data_flow_ops._get_session_tensor(holder, dtype)
     result = (holder, reader)
     graph._handle_readers[graph_key] = result
   return result
@@ -283,7 +285,7 @@ def _get_handle_mover(graph, feeder, handle):
     # Create mover if we haven't done it.
     holder, reader = _get_handle_reader(graph, handle, dtype)
     with graph.as_default(), graph.device(feeder.op.device):
-      mover = gen_data_flow_ops.get_session_handle(reader)
+      mover = gen_data_flow_ops._get_session_handle(reader)  # pylint: disable=protected-access
     result = (holder, mover)
     graph._handle_movers[graph_key] = result
   return result
@@ -297,7 +299,7 @@ def _get_handle_deleter(graph, deleter_key, handle):
     handle_device = TensorHandle._get_device_name(handle)
     with graph.as_default(), graph.device(handle_device):
       holder = array_ops.placeholder(dtypes.string)
-      deleter = gen_data_flow_ops.delete_session_tensor(holder)
+      deleter = gen_data_flow_ops._delete_session_tensor(holder)
     result = (holder, deleter)
     graph._handle_deleters[deleter_key] = result
   return result

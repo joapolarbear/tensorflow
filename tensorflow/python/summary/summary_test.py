@@ -12,12 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Tests for the API surface of the V1 tf.summary ops.
-
-These tests don't check the actual serialized proto summary value for the
-more complex summaries (e.g. audio, image).  Those test live separately in
-tensorflow/python/kernel_tests/summary_v1_*.py.
-"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -27,21 +21,18 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 
 from tensorflow.core.framework import summary_pb2
 from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import meta_graph
 from tensorflow.python.framework import ops
-from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
 from tensorflow.python.summary import summary as summary_lib
 
 
-class SummaryTest(test.TestCase):
+class ScalarSummaryTest(test.TestCase):
 
-  @test_util.run_deprecated_v1
   def testScalarSummary(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = constant_op.constant(3)
       with ops.name_scope('outer'):
         im = summary_lib.scalar('inner', i)
@@ -53,9 +44,8 @@ class SummaryTest(test.TestCase):
     self.assertEqual(values[0].tag, 'outer/inner')
     self.assertEqual(values[0].simple_value, 3.0)
 
-  @test_util.run_deprecated_v1
   def testScalarSummaryWithFamily(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = constant_op.constant(7)
       with ops.name_scope('outer'):
         im1 = summary_lib.scalar('inner', i, family='family')
@@ -77,9 +67,8 @@ class SummaryTest(test.TestCase):
     self.assertEqual(values[0].tag, 'family/outer/family/inner_1')
     self.assertEqual(values[0].simple_value, 7.0)
 
-  @test_util.run_deprecated_v1
   def testSummarizingVariable(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       c = constant_op.constant(42.0)
       v = variables.Variable(c)
       ss = summary_lib.scalar('summary', v)
@@ -93,9 +82,8 @@ class SummaryTest(test.TestCase):
     self.assertEqual(value.tag, 'summary')
     self.assertEqual(value.simple_value, 42.0)
 
-  @test_util.run_deprecated_v1
   def testImageSummary(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 4, 4, 3))
       with ops.name_scope('outer'):
         im = summary_lib.image('inner', i, max_outputs=3)
@@ -108,9 +96,8 @@ class SummaryTest(test.TestCase):
     expected = sorted('outer/inner/image/{}'.format(i) for i in xrange(3))
     self.assertEqual(tags, expected)
 
-  @test_util.run_deprecated_v1
   def testImageSummaryWithFamily(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 2, 3, 1))
       with ops.name_scope('outer'):
         im = summary_lib.image('inner', i, max_outputs=3, family='family')
@@ -125,9 +112,8 @@ class SummaryTest(test.TestCase):
                       for i in xrange(3))
     self.assertEqual(tags, expected)
 
-  @test_util.run_deprecated_v1
   def testHistogramSummary(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 4, 4, 3))
       with ops.name_scope('outer'):
         summ_op = summary_lib.histogram('inner', i)
@@ -137,9 +123,8 @@ class SummaryTest(test.TestCase):
     self.assertEqual(len(summary.value), 1)
     self.assertEqual(summary.value[0].tag, 'outer/inner')
 
-  @test_util.run_deprecated_v1
   def testHistogramSummaryWithFamily(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 4, 4, 3))
       with ops.name_scope('outer'):
         summ_op = summary_lib.histogram('inner', i, family='family')
@@ -150,15 +135,8 @@ class SummaryTest(test.TestCase):
     self.assertEqual(len(summary.value), 1)
     self.assertEqual(summary.value[0].tag, 'family/outer/family/inner')
 
-  def testHistogramSummaryTypes(self):
-    for dtype in (dtypes.int8, dtypes.uint8, dtypes.int16, dtypes.int32,
-                  dtypes.float32, dtypes.float64):
-      const = constant_op.constant(10, dtype=dtype)
-      summary_lib.histogram('h', const)
-
-  @test_util.run_deprecated_v1
   def testAudioSummary(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 3, 4))
       with ops.name_scope('outer'):
         aud = summary_lib.audio('inner', i, 0.2, max_outputs=3)
@@ -171,9 +149,8 @@ class SummaryTest(test.TestCase):
     expected = sorted('outer/inner/audio/{}'.format(i) for i in xrange(3))
     self.assertEqual(tags, expected)
 
-  @test_util.run_deprecated_v1
   def testAudioSummaryWithFamily(self):
-    with self.cached_session() as s:
+    with self.test_session() as s:
       i = array_ops.ones((5, 3, 4))
       with ops.name_scope('outer'):
         aud = summary_lib.audio('inner', i, 0.2, max_outputs=3, family='family')
@@ -188,23 +165,6 @@ class SummaryTest(test.TestCase):
                       for i in xrange(3))
     self.assertEqual(tags, expected)
 
-  @test_util.run_deprecated_v1
-  def testTextSummary(self):
-    with self.cached_session():
-      with self.assertRaises(ValueError):
-        num = array_ops.constant(1)
-        summary_lib.text('foo', num)
-
-      # The API accepts vectors.
-      arr = array_ops.constant(['one', 'two', 'three'])
-      summ = summary_lib.text('foo', arr)
-      self.assertEqual(summ.op.type, 'TensorSummaryV2')
-
-      # the API accepts scalars
-      summ = summary_lib.text('foo', array_ops.constant('one'))
-      self.assertEqual(summ.op.type, 'TensorSummaryV2')
-
-  @test_util.run_deprecated_v1
   def testSummaryNameConversion(self):
     c = constant_op.constant(3)
     s = summary_lib.scalar('name with spaces', c)
@@ -216,7 +176,6 @@ class SummaryTest(test.TestCase):
     s3 = summary_lib.scalar('/name/with/leading/slash', c)
     self.assertEqual(s3.op.name, 'name/with/leading/slash')
 
-  @test_util.run_deprecated_v1
   def testSummaryWithFamilyMetaGraphExport(self):
     with ops.name_scope('outer'):
       i = constant_op.constant(11)
@@ -235,7 +194,7 @@ class SummaryTest(test.TestCase):
       new_summ_f = g.get_tensor_by_name('new_outer/family/inner:0')
 
       # However, the tags are unaffected.
-      with self.cached_session() as s:
+      with self.test_session() as s:
         new_summ_str, new_summ_f_str = s.run([new_summ, new_summ_f])
         new_summ_pb = summary_pb2.Summary()
         new_summ_pb.ParseFromString(new_summ_str)

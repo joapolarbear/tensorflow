@@ -27,12 +27,14 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/statusor.h"
 #include "tensorflow/stream_executor/multi_platform_manager.h"
 #include "tensorflow/stream_executor/platform.h"
+#include "tensorflow/stream_executor/platform/mutex.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/platform/thread_annotations.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
 #include "tensorflow/stream_executor/trace_listener.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace host {
 
 // Host (CPU) platform plugin, registered as a singleton value via module
@@ -50,9 +52,6 @@ class HostPlatform : public Platform {
   int VisibleDeviceCount() const override;
 
   const string& Name() const override;
-
-  port::StatusOr<std::unique_ptr<DeviceDescription>> DescriptionForDevice(
-      int ordinal) const override;
 
   port::StatusOr<StreamExecutor*> ExecutorForDevice(int ordinal) override;
 
@@ -80,6 +79,7 @@ class HostPlatform : public Platform {
 };
 
 }  // namespace host
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_HOST_HOST_PLATFORM_H_

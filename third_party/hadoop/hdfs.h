@@ -16,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef TENSORFLOW_THIRD_PARTY_HADOOP_HDFS_H_
-#define TENSORFLOW_THIRD_PARTY_HADOOP_HDFS_H_
+#ifndef LIBHDFS_HDFS_H
+#define LIBHDFS_HDFS_H
 
 #include <errno.h>  /* for EINTERNAL, etc. */
 #include <fcntl.h>  /* for O_RDONLY, O_WRONLY */
@@ -904,7 +904,7 @@ void hadoopRzBufferFree(hdfsFile file, struct hadoopRzBuffer *buffer);
 #endif
 
 #undef LIBHDFS_EXTERNAL
-#endif  // TENSORFLOW_THIRD_PARTY_HADOOP_HDFS_H_
+#endif /*LIBHDFS_HDFS_H*/
 
 /**
  * vim: ts=4: sw=4: et

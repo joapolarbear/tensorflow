@@ -1,12 +1,11 @@
 # Description:
 #   Contains kernels for the input pipeline.
 
-package(
-    default_visibility = ["//tensorflow:__subpackages__"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:__subpackages__"])
 
 cc_library(
     name = "input_pipeline_kernels",
@@ -14,7 +13,18 @@ cc_library(
     deps = [
         "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
-        "@com_google_protobuf//:protobuf_headers",
+        "@protobuf_archive//:protobuf_headers",
     ],
     alwayslink = 1,
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
 )

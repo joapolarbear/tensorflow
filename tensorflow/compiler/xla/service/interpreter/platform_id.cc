@@ -14,10 +14,12 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/compiler/xla/service/interpreter/platform_id.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace interpreter {
 
-PLATFORM_DEFINE_ID(kXlaInterpreterPlatformId);
+PLATFORM_DEFINE_ID(kInterpreterPlatformId);
 
 }  // namespace interpreter
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

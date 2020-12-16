@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef TENSORFLOW_CONTRIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
-#define TENSORFLOW_CONTRIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
+#ifndef LEARNING_LIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
+#define LEARNING_LIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
 #include <vector>
 
 #include "tensorflow/core/framework/tensor.h"
@@ -24,11 +24,16 @@ namespace tensorflow {
 namespace tensorforest {
 
 // Returns the probability that the point falls to the left.
-float LeftProbability(const Tensor& point, const Tensor& weight, float bias,
+float LeftProbability(const Tensor& point,
+                      const Tensor& weight,
+                      float bias,
                       int num_features);
 
-float LeftProbabilityK(const Tensor& point, std::vector<int32> feature_set,
-                       const Tensor& weight, float bias, int num_features,
+float LeftProbabilityK(const Tensor& point,
+                       std::vector<int32> feature_set,
+                       const Tensor& weight,
+                       float bias,
+                       int num_features,
                        int k);
 
 // Returns a random set of num_features_to_pick features in the
@@ -43,4 +48,6 @@ void GetFeatureSet(int32 tree_num, int32 node_num, int32 random_seed,
 }  // namespace tensorforest
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CONTRIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
+#endif  // LEARNING_LIB_TENSOR_FOREST_HYBRID_CORE_OPS_UTILS_H_
+
+

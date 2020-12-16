@@ -34,6 +34,7 @@ TEST(MapUtil, Find) {
   m["foo"] = "bar";
   EXPECT_EQ("bar", gtl::FindWithDefault(m, "foo", ""));
   EXPECT_EQ("bar", *gtl::FindOrNull(m, "foo"));
+  string str;
   EXPECT_TRUE(m.count("foo") > 0);
   EXPECT_EQ(m["foo"], "bar");
 }

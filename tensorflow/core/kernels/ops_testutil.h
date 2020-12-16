@@ -13,16 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_OPS_TESTUTIL_H_
-#define TENSORFLOW_CORE_KERNELS_OPS_TESTUTIL_H_
+#ifndef TENSORFLOW_KERNELS_OPS_TESTUTIL_H_
+#define TENSORFLOW_KERNELS_OPS_TESTUTIL_H_
 
 #include <memory>
 #include <vector>
 
 #include "tensorflow/core/common_runtime/device.h"
 #include "tensorflow/core/common_runtime/device_factory.h"
-#include "tensorflow/core/common_runtime/device_mgr.h"
-#include "tensorflow/core/common_runtime/process_function_library_runtime.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/framework/device_base.h"
 #include "tensorflow/core/framework/graph.pb.h"
@@ -72,21 +70,11 @@ inline void SetOutputAttrs(OpKernelContext::Params* params,
 // to use the BrainClient interface.
 class OpsTestBase : public ::testing::Test {
  public:
-  OpsTestBase() : device_type_(DEVICE_CPU) {
-    auto device =
-        DeviceFactory::NewDevice("CPU", {}, "/job:a/replica:0/task:0");
-    CHECK(device) << "Could not create CPU device";
-
-    device_ = device.get();
-    device_mgr_ = absl::make_unique<DeviceMgr>(std::move(device));
-
+  OpsTestBase()
+      : device_(DeviceFactory::NewDevice("CPU", {}, "/job:a/replica:0/task:0")),
+        device_type_(DEVICE_CPU) {
+    CHECK(device_.get()) << "Could not create CPU device";
     allocator_ = device_->GetAllocator(AllocatorAttributes());
-
-    flib_def_ = absl::make_unique<FunctionLibraryDefinition>(
-        OpRegistry::Global(), FunctionDefLibrary{});
-    pflr_ = absl::make_unique<ProcessFunctionLibraryRuntime>(
-        device_mgr_.get(), Env::Default(), TF_GRAPH_DEF_VERSION,
-        flib_def_.get(), OptimizerOptions());
   }
 
   ~OpsTestBase() override {
@@ -113,8 +101,8 @@ class OpsTestBase : public ::testing::Test {
   // Only use this directly if you have a deprecated op that you need to test.
   Status InitOpWithGraphVersion(int graph_def_version) {
     Status status;
-    kernel_ = CreateOpKernel(device_type_, device_, allocator(), node_def_,
-                             graph_def_version, &status);
+    kernel_ = CreateOpKernel(device_type_, device_.get(), allocator(),
+                             node_def_, graph_def_version, &status);
     if (kernel_ != nullptr) input_types_ = kernel_->input_types();
     return status;
   }
@@ -152,13 +140,14 @@ class OpsTestBase : public ::testing::Test {
     CHECK_GT(input_types_.size(), inputs_.size())
         << "Adding more inputs than types; perhaps you need to call MakeOp";
     ResourceMgr* rm = device_->resource_manager();
-    std::string container_name =
-        container == "" ? rm->default_container() : container;
-    EXPECT_TRUE(rm->Create(container_name, name, resource).ok());
+    EXPECT_TRUE(
+        rm->Create(container == "" ? rm->default_container() : container, name,
+                   resource)
+            .ok());
     TypeIndex type_index = MakeTypeIndex<T>();
     ResourceHandle handle;
     handle.set_device(device_->name());
-    handle.set_container(container_name);
+    handle.set_container(container);
     handle.set_name(name);
     handle.set_hash_code(type_index.hash_code());
     handle.set_maybe_type_name(type_index.name());
@@ -176,23 +165,18 @@ class OpsTestBase : public ::testing::Test {
     // it was using.
     context_.reset(nullptr);
 
-    // Delete the output copies from previous runs.
-    gtl::STLDeleteElements(&managed_outputs_);
-    managed_outputs_.resize(0);
-
     params_.reset(new OpKernelContext::Params);
-    params_->device = device_;
-    params_->frame_iter = FrameAndIter(0, 0);
-    params_->inputs = &inputs_;
-    params_->op_kernel = kernel_.get();
+    params_.get()->device = device_.get();
+    params_.get()->frame_iter = FrameAndIter(0, 0);
+    params_.get()->inputs = &inputs_;
+    params_.get()->op_kernel = kernel_.get();
     step_container_.reset(new ScopedStepContainer(0, [](const string&) {}));
     params_->step_container = step_container_.get();
     std::vector<AllocatorAttributes> attrs;
     test::SetOutputAttrs(params_.get(), &attrs);
     checkpoint::TensorSliceReaderCacheWrapper slice_reader_cache_wrapper;
-    params_->slice_reader_cache = &slice_reader_cache_wrapper;
-    params_->resource_manager = device_->resource_manager();
-    params_->function_library = pflr_->GetFLR(device_->name());
+    params_.get()->slice_reader_cache = &slice_reader_cache_wrapper;
+    params_.get()->resource_manager = device_.get()->resource_manager();
 
     context_.reset(new OpKernelContext(params_.get()));
     device_->Compute(kernel_.get(), context_.get());
@@ -221,7 +205,7 @@ class OpsTestBase : public ::testing::Test {
 
   const DataTypeVector& output_types() const { return kernel_->output_types(); }
 
- protected:
+ private:
   Tensor* AddInput(DataType dtype, const TensorShape& shape) {
     CHECK_GT(input_types_.size(), inputs_.size())
         << "Adding more inputs than types; perhaps you need to call MakeOp";
@@ -238,10 +222,8 @@ class OpsTestBase : public ::testing::Test {
     return input;
   }
 
-  // device_mgr_ owns device_.
-  std::unique_ptr<DeviceMgr> device_mgr_;
-  Device* device_;
-
+ protected:
+  std::unique_ptr<Device> device_;
   // The device allocator, or the managed_allocator_ below if running on GPU.
   Allocator* allocator_;
 
@@ -264,13 +246,10 @@ class OpsTestBase : public ::testing::Test {
   // Unified memory allocator, only used when running on GPU.
   std::unique_ptr<Allocator> managed_allocator_;
 
-  std::unique_ptr<FunctionLibraryDefinition> flib_def_;
-  std::unique_ptr<ProcessFunctionLibraryRuntime> pflr_;
-
  private:
   TF_DISALLOW_COPY_AND_ASSIGN(OpsTestBase);
 };
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_KERNELS_OPS_TESTUTIL_H_
+#endif  // TENSORFLOW_KERNELS_OPS_TESTUTIL_H_

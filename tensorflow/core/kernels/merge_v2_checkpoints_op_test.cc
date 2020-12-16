@@ -79,10 +79,10 @@ class MergeV2CheckpointsOpTest : public OpsTestBase {
     // Now merges.
     MakeOp(delete_old_dirs);
     // Add checkpoint_prefixes.
-    AddInput<tstring>(TensorShape({2}),
-                      [&prefixes](int i) -> tstring { return prefixes[i]; });
+    AddInput<string>(TensorShape({2}),
+                     [&prefixes](int i) -> string { return prefixes[i]; });
     // Add destination_prefix.
-    AddInput<tstring>(TensorShape({}), [kMergedPrefix](int unused) -> tstring {
+    AddInput<string>(TensorShape({}), [kMergedPrefix](int unused) -> string {
       return kMergedPrefix;
     });
     TF_ASSERT_OK(RunOpKernel());
@@ -114,7 +114,9 @@ class MergeV2CheckpointsOpTest : public OpsTestBase {
     // Exercises "delete_old_dirs".
     for (int i = 0; i < 2; ++i) {
       int directory_found =
-          Env::Default()->IsDirectory(string(io::Dirname(prefixes[i]))).code();
+          Env::Default()
+              ->IsDirectory(io::Dirname(prefixes[i]).ToString())
+              .code();
       if (delete_old_dirs) {
         EXPECT_EQ(error::NOT_FOUND, directory_found);
       } else {

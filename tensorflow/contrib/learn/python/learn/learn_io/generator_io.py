@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Methods to allow generator of dict with numpy arrays (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Methods to allow generator of dict with numpy arrays."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -28,10 +23,8 @@ from types import FunctionType
 from types import GeneratorType
 
 from tensorflow.python.estimator.inputs.queues.feeding_functions import _enqueue_data as enqueue_data
-from tensorflow.python.util.deprecation import deprecated
 
 
-@deprecated(None, 'Please use tf.data.')
 def generator_input_fn(x,
                        target_key=None,
                        batch_size=128,
@@ -59,7 +52,7 @@ def generator_input_fn(x,
               'age': np.random.randint(18, 80),
               'label': np.ones(1)}
 
-    with tf.compat.v1.Session() as session:
+    with tf.Session() as session:
       input_fn = generator_io.generator_input_fn(
           generator, target_key="label", batch_size=2, shuffle=False,
           num_epochs=1)

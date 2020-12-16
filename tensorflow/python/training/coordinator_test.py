@@ -85,8 +85,8 @@ class CoordinatorTest(test.TestCase):
     self.assertFalse(coord.wait_for_stop(0.1))
     wait_for_stop_ev = threading.Event()
     has_stopped_ev = threading.Event()
-    t = threading.Thread(
-        target=StopOnEvent, args=(coord, wait_for_stop_ev, has_stopped_ev))
+    t = threading.Thread(target=StopOnEvent,
+                         args=(coord, wait_for_stop_ev, has_stopped_ev))
     t.start()
     self.assertFalse(coord.should_stop())
     self.assertFalse(coord.wait_for_stop(0.01))
@@ -100,8 +100,7 @@ class CoordinatorTest(test.TestCase):
     threads = [
         threading.Thread(target=SleepABit, args=(0.01,)),
         threading.Thread(target=SleepABit, args=(0.02,)),
-        threading.Thread(target=SleepABit, args=(0.01,))
-    ]
+        threading.Thread(target=SleepABit, args=(0.01,))]
     for t in threads:
       t.start()
     coord.join(threads)
@@ -113,8 +112,7 @@ class CoordinatorTest(test.TestCase):
     threads = [
         threading.Thread(target=SleepABit, args=(0.01, coord)),
         threading.Thread(target=SleepABit, args=(0.02, coord)),
-        threading.Thread(target=SleepABit, args=(0.01, coord))
-    ]
+        threading.Thread(target=SleepABit, args=(0.01, coord))]
     for t in threads:
       t.start()
     WaitForThreadsToRegister(coord, 3)
@@ -127,8 +125,7 @@ class CoordinatorTest(test.TestCase):
     threads = [
         threading.Thread(target=SleepABit, args=(0.01, coord)),
         threading.Thread(target=SleepABit, args=(0.02,)),
-        threading.Thread(target=SleepABit, args=(0.01, coord))
-    ]
+        threading.Thread(target=SleepABit, args=(0.01, coord))]
     for t in threads:
       t.start()
     WaitForThreadsToRegister(coord, 2)
@@ -138,17 +135,14 @@ class CoordinatorTest(test.TestCase):
       self.assertFalse(t.is_alive())
 
   def testJoinGraceExpires(self):
-
     def TestWithGracePeriod(stop_grace_period):
       coord = coordinator.Coordinator()
       wait_for_stop_ev = threading.Event()
       has_stopped_ev = threading.Event()
       threads = [
-          threading.Thread(
-              target=StopOnEvent,
-              args=(coord, wait_for_stop_ev, has_stopped_ev)),
-          threading.Thread(target=SleepABit, args=(10.0,))
-      ]
+          threading.Thread(target=StopOnEvent,
+                           args=(coord, wait_for_stop_ev, has_stopped_ev)),
+          threading.Thread(target=SleepABit, args=(10.0,))]
       for t in threads:
         t.daemon = True
         t.start()
@@ -156,7 +150,6 @@ class CoordinatorTest(test.TestCase):
       has_stopped_ev.wait()
       with self.assertRaisesRegexp(RuntimeError, "threads still running"):
         coord.join(threads, stop_grace_period_secs=stop_grace_period)
-
     TestWithGracePeriod(1e-10)
     TestWithGracePeriod(0.002)
     TestWithGracePeriod(1.0)
@@ -166,16 +159,16 @@ class CoordinatorTest(test.TestCase):
     wait_for_stop_ev = threading.Event()
     has_stopped_ev = threading.Event()
     threads = [
-        threading.Thread(
-            target=StopOnEvent, args=(coord, wait_for_stop_ev, has_stopped_ev)),
-        threading.Thread(target=SleepABit, args=(10.0,))
-    ]
+        threading.Thread(target=StopOnEvent,
+                         args=(coord, wait_for_stop_ev, has_stopped_ev)),
+        threading.Thread(target=SleepABit, args=(10.0,))]
     for t in threads:
       t.daemon = True
       t.start()
     wait_for_stop_ev.set()
     has_stopped_ev.wait()
-    coord.join(threads, stop_grace_period_secs=1., ignore_live_threads=True)
+    coord.join(
+        threads, stop_grace_period_secs=1., ignore_live_threads=True)
 
   def testJoinRaiseReportExcInfo(self):
     coord = coordinator.Coordinator()
@@ -187,8 +180,7 @@ class CoordinatorTest(test.TestCase):
             args=(coord, ev_1, ev_2, RuntimeError("First"), False)),
         threading.Thread(
             target=RaiseOnEvent,
-            args=(coord, ev_2, None, RuntimeError("Too late"), False))
-    ]
+            args=(coord, ev_2, None, RuntimeError("Too late"), False))]
     for t in threads:
       t.start()
 
@@ -207,8 +199,7 @@ class CoordinatorTest(test.TestCase):
             args=(coord, ev_1, ev_2, RuntimeError("First"), True)),
         threading.Thread(
             target=RaiseOnEvent,
-            args=(coord, ev_2, None, RuntimeError("Too late"), True))
-    ]
+            args=(coord, ev_2, None, RuntimeError("Too late"), True))]
     for t in threads:
       t.start()
 
@@ -223,8 +214,9 @@ class CoordinatorTest(test.TestCase):
         threading.Thread(
             target=RaiseOnEvent,
             args=(coord, ev_1, None,
-                  errors_impl.OutOfRangeError(None, None, "First"), True))
-    ]
+                  errors_impl.OutOfRangeError(None, None, "First"),
+                  True))
+        ]
     for t in threads:
       t.start()
 
@@ -238,7 +230,7 @@ class CoordinatorTest(test.TestCase):
         threading.Thread(
             target=RaiseOnEvent,
             args=(coord, ev_1, None, ValueError("Clean stop"), True))
-    ]
+        ]
     for t in threads:
       t.start()
 
@@ -255,8 +247,7 @@ class CoordinatorTest(test.TestCase):
             args=(coord, ev_1, ev_2, RuntimeError("First"))),
         threading.Thread(
             target=RaiseOnEventUsingContextHandler,
-            args=(coord, ev_2, None, RuntimeError("Too late")))
-    ]
+            args=(coord, ev_2, None, RuntimeError("Too late")))]
     for t in threads:
       t.start()
 
@@ -271,7 +262,7 @@ class CoordinatorTest(test.TestCase):
         threading.Thread(
             target=RaiseOnEvent,
             args=(coord, ev_1, None, RuntimeError("First"), True)),
-    ]
+        ]
     for t in threads:
       t.start()
 
@@ -283,7 +274,7 @@ class CoordinatorTest(test.TestCase):
         threading.Thread(
             target=RaiseOnEvent,
             args=(coord, ev_1, None, RuntimeError("Second"), True)),
-    ]
+        ]
     for t in threads:
       t.start()
     with self.assertRaisesRegexp(RuntimeError, "Second"):
@@ -346,29 +337,24 @@ class LooperTest(test.TestCase):
   def testTargetArgs(self):
     n = [3]
     coord = coordinator.Coordinator()
-    thread = coordinator.LooperThread.loop(
-        coord, 0, target=_StopAt0, args=(coord, n))
+    thread = coordinator.LooperThread.loop(coord, 0, target=_StopAt0,
+                                        args=(coord, n))
     coord.join([thread])
     self.assertEqual(0, n[0])
 
   def testTargetKwargs(self):
     n = [3]
     coord = coordinator.Coordinator()
-    thread = coordinator.LooperThread.loop(
-        coord, 0, target=_StopAt0, kwargs={
-            "coord": coord,
-            "n": n
-        })
+    thread = coordinator.LooperThread.loop(coord, 0, target=_StopAt0,
+                                        kwargs={"coord": coord, "n": n})
     coord.join([thread])
     self.assertEqual(0, n[0])
 
   def testTargetMixedArgs(self):
     n = [3]
     coord = coordinator.Coordinator()
-    thread = coordinator.LooperThread.loop(
-        coord, 0, target=_StopAt0, args=(coord,), kwargs={
-            "n": n
-        })
+    thread = coordinator.LooperThread.loop(coord, 0, target=_StopAt0,
+                                        args=(coord,), kwargs={"n": n})
     coord.join([thread])
     self.assertEqual(0, n[0])
 

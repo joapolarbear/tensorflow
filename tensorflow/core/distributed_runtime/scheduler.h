@@ -16,15 +16,15 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_SCHEDULER_H_
 #define TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_SCHEDULER_H_
 
-#include <deque>
 #include <functional>
+#include <deque>
 #include <map>
 #include <unordered_map>
 #include <vector>
 
+#include "tensorflow/core/graph/costmodel.h"
 #include "tensorflow/core/common_runtime/device.h"
 #include "tensorflow/core/common_runtime/device_set.h"
-#include "tensorflow/core/graph/costmodel.h"
 
 namespace tensorflow {
 
@@ -57,11 +57,11 @@ class GreedyScheduler {
   struct Sim {
     int degree_parallelism;
     int num_running;
-    std::vector<const Node*> ready_nodes;
+    std::vector<Node*> ready_nodes;
   };
 
   struct Event {
-    const Node* node;
+    Node* node;
     Microseconds time;
     bool is_completion;
 
@@ -79,7 +79,7 @@ class GreedyScheduler {
 
  private:
   // Returns the ready node with the highest priority for a sim.
-  const Node* GetNodeWithHighestPriority(const std::vector<const Node*>& nodes);
+  Node* GetNodeWithHighestPriority(const std::vector<Node*>& nodes);
 
   const DeviceSet* devices_;
   const CostModel* cost_model_;

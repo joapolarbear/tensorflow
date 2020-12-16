@@ -16,8 +16,8 @@ limitations under the License.
 // Class and associated machinery for specifying an Op's OpDef and shape
 // inference function for Op registration.
 
-#ifndef TENSORFLOW_CORE_FRAMEWORK_OP_DEF_BUILDER_H_
-#define TENSORFLOW_CORE_FRAMEWORK_OP_DEF_BUILDER_H_
+#ifndef TENSORFLOW_FRAMEWORK_OP_DEF_BUILDER_H_
+#define TENSORFLOW_FRAMEWORK_OP_DEF_BUILDER_H_
 
 #include <string>
 #include <vector>
@@ -27,8 +27,6 @@ limitations under the License.
 #include "tensorflow/core/platform/macros.h"
 
 namespace tensorflow {
-
-class FunctionDefHelper;
 
 namespace shape_inference {
 class InferenceContext;
@@ -53,7 +51,7 @@ struct OpRegistrationData {
 class OpDefBuilder {
  public:
   // Constructs an OpDef with just the name field set.
-  explicit OpDefBuilder(string op_name);
+  explicit OpDefBuilder(StringPiece op_name);
 
   // Adds an attr to this OpDefBuilder (and returns *this). The spec has
   // format "<name>:<type>" or "<name>:<type>=<default>"
@@ -86,7 +84,7 @@ class OpDefBuilder {
   // * Ability to restrict the type of the tensor like the existing
   //   restrictions for type attrs.
   // Perhaps by linking the type of the tensor to a type attr?
-  OpDefBuilder& Attr(string spec);
+  OpDefBuilder& Attr(StringPiece spec);
 
   // Adds an input or output to this OpDefBuilder (and returns *this).
   // The spec has form "<name>:<type-expr>" or "<name>:Ref(<type-expr>)"
@@ -103,8 +101,8 @@ class OpDefBuilder {
   // in the spec?
   // TODO(josh11b): SparseInput() and SparseOutput() matching the Python
   // handling?
-  OpDefBuilder& Input(string spec);
-  OpDefBuilder& Output(string spec);
+  OpDefBuilder& Input(StringPiece spec);
+  OpDefBuilder& Output(StringPiece spec);
 
   // Turns on the indicated boolean flag in this OpDefBuilder (and
   // returns *this).
@@ -114,7 +112,7 @@ class OpDefBuilder {
   OpDefBuilder& SetAllowsUninitializedInput();
 
   // Deprecate the op at a certain GraphDef version.
-  OpDefBuilder& Deprecated(int version, string explanation);
+  OpDefBuilder& Deprecated(int version, StringPiece explanation);
 
   // Adds docs to this OpDefBuilder (and returns *this).
   // Docs have the format:
@@ -130,9 +128,9 @@ class OpDefBuilder {
   // to suppress the automatically-generated type documentation in
   // generated output.
 #ifndef TF_LEAN_BINARY
-  OpDefBuilder& Doc(string text);
+  OpDefBuilder& Doc(StringPiece text);
 #else
-  OpDefBuilder& Doc(string text) { return *this; }
+  OpDefBuilder& Doc(StringPiece text) { return *this; }
 #endif
 
   // Sets the shape function to be used for shape inference.
@@ -140,7 +138,7 @@ class OpDefBuilder {
   // Note that currently (October 2016), python code still requires a
   // RegisterShape call to invoke this; see call_cpp_shape_fn in
   // python/framework/common_shapes.py
-  OpDefBuilder& SetShapeFn(OpShapeInferenceFn fn);
+  OpDefBuilder& SetShapeFn(Status (*fn)(shape_inference::InferenceContext*));
 
   // Sets op_reg_data->op_def to the requested OpDef and
   // op_reg_data->shape_inference_fn to the requested shape inference function,
@@ -152,24 +150,16 @@ class OpDefBuilder {
   Status Finalize(OpRegistrationData* op_reg_data) const;
 
  private:
-  friend class FunctionDefHelper;
-
-  // Adds control output to this OpDefBuilder (and returns *this).
-  // The <name> must be a valid node name (matches regexp
-  // [a-zA-Z][a-zA-Z0-9_]*). Named control output can only exist for functions.
-  OpDefBuilder& ControlOutput(string name);
-
   OpDef* op_def() { return &op_reg_data_.op_def; }
 
   OpRegistrationData op_reg_data_;
   std::vector<string> attrs_;
   std::vector<string> inputs_;
   std::vector<string> outputs_;
-  std::vector<string> control_outputs_;
   string doc_;
   std::vector<string> errors_;
 };
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_FRAMEWORK_OP_DEF_BUILDER_H_
+#endif  // TENSORFLOW_FRAMEWORK_OP_DEF_BUILDER_H_

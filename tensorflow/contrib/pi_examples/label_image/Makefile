@@ -34,14 +34,12 @@ CXXFLAGS := --std=c++11 $(OPTFLAGS)
 LDFLAGS := \
 -L/usr/local/lib \
 -L$(TFLIBDIR) \
--L$(DOWNLOADSDIR)/nsync/builds/default.linux.c++11/ \
 -Wl,--no-whole-archive
 INCLUDES := \
 -I/usr/local/include \
 -I. \
 -I$(DOWNLOADSDIR) \
 -I$(DOWNLOADSDIR)/eigen/ \
--I$(DOWNLOADSDIR)/absl/ \
 -I$(PROTOGENDIR) \
 -I$(PBTGENDIR)
 LIBS := \
@@ -51,7 +49,6 @@ LIBS := \
 -Wl,--no-whole-archive \
 -lstdc++ \
 -lprotobuf \
--lnsync \
 -ldl \
 -lpthread \
 -lm \

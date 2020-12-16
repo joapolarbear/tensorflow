@@ -2,12 +2,13 @@
 #   Contains `SessionRunHook`s for use with `MonitoredSession` and the
 #   wrappers around it.
 
-package(
-    default_visibility = ["//tensorflow:__subpackages__"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//tensorflow:__subpackages__"])
+
+load("//tensorflow:tensorflow.bzl", "py_test")
 
 py_library(
     name = "hooks",
@@ -21,4 +22,15 @@ py_library(
         "//tensorflow/python:training",
         "//tensorflow/python:util",
     ],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
 )

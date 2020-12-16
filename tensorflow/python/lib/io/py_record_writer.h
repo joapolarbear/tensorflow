@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
-#include "tensorflow/core/lib/io/record_writer.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
@@ -37,12 +36,14 @@ class RecordWriter;
 // by multiple threads.
 class PyRecordWriter {
  public:
+  // TODO(vrv): make this take a shared proto to configure
+  // the compression options.
   static PyRecordWriter* New(const string& filename,
-                             const io::RecordWriterOptions& compression_options,
+                             const string& compression_type_string,
                              TF_Status* out_status);
   ~PyRecordWriter();
 
-  void WriteRecord(tensorflow::StringPiece record, TF_Status* out_status);
+  bool WriteRecord(tensorflow::StringPiece record);
   void Flush(TF_Status* out_status);
   void Close(TF_Status* out_status);
 

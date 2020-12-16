@@ -17,13 +17,13 @@ limitations under the License.
 
 #define EIGEN_USE_GPU
 
-#include <complex>
+#include "tensorflow/core/kernels/determinant_op.h"
 
+#include <complex>
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/cuda_solvers.h"
-#include "tensorflow/core/kernels/determinant_op.h"
-#include "tensorflow/core/util/gpu_kernel_helper.h"
+#include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
 namespace functor {
@@ -95,7 +95,7 @@ __global__ void DeterminantFromPivotedLUKernel(int nthreads, int n,
   // since this cheap O(n) kernel always follows an O(n^3) LU factorization.
   // The main purpose is to avoid having to copy the LU decomposition to
   // host memory.
-  GPU_1D_KERNEL_LOOP(o_idx, nthreads) {
+  CUDA_1D_KERNEL_LOOP(o_idx, nthreads) {
     // Initialize sign to (-1)^order.
     const int order = PermutationOrder(n, all_pivots + o_idx * n);
     Scalar prod_sign = order % 2 ? Scalar(-1) : Scalar(1);
@@ -128,13 +128,11 @@ struct DeterminantFromPivotedLUFunctor<GPUDevice, Scalar> {
                   int* info) {
     const int64 num_matrices = output.size();
     const int64 n = lu_factor.dimension(2);
-    GpuLaunchConfig config = GetGpuLaunchConfig(num_matrices, device);
-
-    TF_CHECK_OK(GpuLaunchKernel(
-        DeterminantFromPivotedLUKernel<Scalar, /*compute_log_abs_det=*/false>,
-        config.block_count, config.thread_per_block, 0, device.stream(),
-        config.virtual_thread_count, n, lu_factor.data(), pivots, nullptr,
-        output.data()));
+    CudaLaunchConfig config = GetCudaLaunchConfig(num_matrices, device);
+    DeterminantFromPivotedLUKernel<Scalar, /*compute_log_abs_det=*/false>
+        <<<config.block_count, config.thread_per_block, 0, device.stream()>>>(
+            config.virtual_thread_count, n, lu_factor.data(), pivots, nullptr,
+            output.data());
   }
 };
 
@@ -151,12 +149,11 @@ struct LogDeterminantFromPivotedLUFunctor<GPUDevice, Scalar> {
                   typename TTypes<Scalar, 1>::Tensor log_abs_det) {
     const int64 num_matrices = sign.size();
     const int64 n = lu_factor.dimension(2);
-    GpuLaunchConfig config = GetGpuLaunchConfig(num_matrices, device);
-    TF_CHECK_OK(GpuLaunchKernel(
-        DeterminantFromPivotedLUKernel<Scalar, /*compute_log_abs_det=*/true>,
-        config.block_count, config.thread_per_block, 0, device.stream(),
-        config.virtual_thread_count, n, lu_factor.data(), pivots, sign.data(),
-        log_abs_det.data()));
+    CudaLaunchConfig config = GetCudaLaunchConfig(num_matrices, device);
+    DeterminantFromPivotedLUKernel<Scalar, /*compute_log_abs_det=*/true>
+        <<<config.block_count, config.thread_per_block, 0, device.stream()>>>(
+            config.virtual_thread_count, n, lu_factor.data(), pivots,
+            sign.data(), log_abs_det.data());
   }
 };
 

@@ -45,8 +45,7 @@ class DecodeVideoOp : public OpKernel {
                 errors::InvalidArgument(
                     "contents must be a rank-0 tensor but got shape ",
                     contents_tensor.shape().DebugString()));
-    const tensorflow::StringPiece contents =
-        contents_tensor.scalar<tstring>()();
+    const tensorflow::StringPiece contents = contents_tensor.scalar<string>()();
 
     // Write the input data to a temp file.
     string extension;
@@ -103,12 +102,16 @@ REGISTER_OP("DecodeVideo")
       return Status::OK();
     })
     .Doc(R"doc(
-Processes the contents of an video file into a tensor using FFmpeg to decode
+Processes the contents of an audio file into a tensor using FFmpeg to decode
 the file.
 
-contents: The binary contents of the video file to decode. This is a
-    scalar.
-output: A rank-4 `Tensor` that has `[frames, height, width, 3]` RGB as output.
+One row of the tensor is created for each channel in the audio file. Each
+channel contains audio samples starting at the beginning of the audio and
+having `1/samples_per_second` time between them. If the `channel_count` is
+different from the contents of the file, channels will be merged or created.
+
+contents: The binary audio file contents, as a string or rank-0 string
+    tensor.
 )doc");
 
 }  // namespace ffmpeg

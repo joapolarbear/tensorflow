@@ -14,17 +14,13 @@
 // limitations under the License.
 // =============================================================================
 
-#include "tensorflow/contrib/periodic_resample/kernels/periodic_resample_op.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/contrib/periodic_resample/kernels/periodic_resample_op.h"
 
 namespace tensorflow {
 
-REGISTER_KERNEL_BUILDER(Name("PeriodicResample").Device(DEVICE_CPU),
-                        PeriodicResampleOp);
-
-
-REGISTER_KERNEL_BUILDER(Name("PeriodicResampleOpGrad")
+REGISTER_KERNEL_BUILDER(Name("PeriodicResample")
                             .Device(DEVICE_CPU),
-                        PeriodicResampleOpGrad);
+                        PeriodicResampleOp);
 
 }  // namespace tensorflow

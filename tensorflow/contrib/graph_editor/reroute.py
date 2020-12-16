@@ -208,9 +208,9 @@ def _reroute_ts(ts0, ts1, mode, can_modify=None, cannot_modify=None):
 def swap_ts(ts0, ts1, can_modify=None, cannot_modify=None):
   """For each tensor's pair, swap the end of (t0,t1).
 
-      B0 B1     B0 B1
-      |  |    =>  X
-      A0 A1     A0 A1
+  B0 B1     B0 B1
+  |  |    =>  X
+  A0 A1     A0 A1
 
   Args:
     ts0: an object convertible to a list of `tf.Tensor`.
@@ -233,9 +233,9 @@ def swap_ts(ts0, ts1, can_modify=None, cannot_modify=None):
 def reroute_ts(ts0, ts1, can_modify=None, cannot_modify=None):
   """For each tensor's pair, replace the end of t1 by the end of t0.
 
-      B0 B1     B0 B1
-      |  |    => |/
-      A0 A1     A0 A1
+  B0 B1     B0 B1
+  |  |    => |/
+  A0 A1     A0 A1
 
   The end of the tensors in ts1 are left dangling.
 
@@ -471,10 +471,9 @@ def remove_control_inputs(op, cops):
     if cop not in op.control_inputs:
       raise ValueError("{} is not a control_input of {}".format(op.name,
                                                                 cop.name))
-  control_inputs = [cop for cop in op.control_inputs if cop not in cops]
   # pylint: disable=protected-access
-  op._remove_all_control_inputs()
-  op._add_control_inputs(control_inputs)
+  op._control_inputs = [cop for cop in op._control_inputs if cop not in cops]
+  op._recompute_node_def()
   # pylint: enable=protected-access
 
 
@@ -497,6 +496,9 @@ def add_control_inputs(op, cops):
     if cop in op.control_inputs:
       raise ValueError("{} is already a control_input of {}".format(cop.name,
                                                                     op.name))
-  op._add_control_inputs(cops)  # pylint: disable=protected-access
+  # pylint: disable=protected-access
+  op._control_inputs += cops
+  op._recompute_node_def()
+  # pylint: enable=protected-access
 
 remove_undocumented(__name__, _allowed_symbols)

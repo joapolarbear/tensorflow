@@ -1,16 +1,15 @@
 # Description:
 #   Benchmark utility that can run on desktop and Android.
 
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])  # Apache 2.0
+
 load(
     "//tensorflow:tensorflow.bzl",
-    "tf_cc_binary",
-    "tf_cc_test",
     "tf_copts",
-)
-
-package(
-    default_visibility = ["//visibility:public"],
-    licenses = ["notice"],  # Apache 2.0
+    "tf_cc_test",
+    "tf_cc_binary",
 )
 
 exports_files(["LICENSE"])
@@ -62,11 +61,10 @@ tf_cc_test(
 
 # This binary may be built for either desktop or Android.
 # A typical Android build command will look like the following:
-# bazel build tensorflow/core:android_tensorflow_lib \
+# bazel build -c opt tensorflow/core:android_tensorflow_lib \
 # --crosstool_top=//external:android/crosstool \
 # --cpu=armeabi-v7a \
 # --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
-# --config monolithic
 tf_cc_binary(
     name = "benchmark_model",
     testonly = 1,
@@ -90,4 +88,13 @@ tf_cc_binary(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [":benchmark_model_lib"],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = ["**/OWNERS"],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

@@ -18,12 +18,14 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/platform/port.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace port {
 
 string Demangle(const char* mangled);
 
 }  // namespace port
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_LIB_DEMANGLE_H_

@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_
-#define TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_
+#define THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_
 
 #include "tensorflow/cc/framework/scope.h"
 
@@ -26,8 +26,6 @@ class ShapeRefiner;
 // graph, status, name_map, and refiner.
 // This is intended to enable the C API (which are used by other language
 // bindings) to create a Scope and access C++ functionality (i.e. gradients).
-//
-// Shape inference is disabled if `refiner` is nullptr.
 Scope NewInternalScope(Graph* graph, Status* status, ShapeRefiner* refiner);
 
 class Scope::Impl {
@@ -36,7 +34,8 @@ class Scope::Impl {
   // name that has not been used so far in a scope will get no suffix. Later
   // uses of the same name will get suffixes _1, _2, _3, etc. Multiple scopes
   // can share the same NameMap. For instance, a new scope created using
-  // WithControlDependencies() would share the same NameMap with the parent.
+  // WithControlDependencies() should would share the same NameMap with the
+  // parent.
   typedef std::unordered_map<string, int> NameMap;
 
   Impl(const std::shared_ptr<Graph>& graph,
@@ -60,8 +59,6 @@ class Scope::Impl {
     enum class ExitOnError;
     enum class KernelLabel;
     enum class Colocate;
-    enum class AssignedDevice;
-    enum class XlaCluster;
   };
 
   Impl(Graph* graph, Status* status, NameMap* name_map, ShapeRefiner* refiner,
@@ -78,8 +75,6 @@ class Scope::Impl {
   Impl(const Scope& other, Tags::KernelLabel, const string& kernel_label);
   Impl(const Scope& other, Tags::Colocate, const Operation& colocate_with_op,
        bool clear_colocations);
-  Impl(const Scope& other, Tags::AssignedDevice, const string& assigned_device);
-  Impl(const Scope& other, Tags::XlaCluster, const string& xla_cluster);
 
   std::unordered_set<string> GetColocationConstraints(
       const Operation& colocate_with_op) const;
@@ -113,8 +108,6 @@ class Scope::Impl {
   const bool exit_on_error_ = false;
   const string kernel_label_ = "";
   const string device_ = "";
-  const string assigned_device_ = "";
-  const string xla_cluster_ = "";
   const std::unordered_set<string> colocation_constraints_;
 
   // If true, Scope::DoShapeInference() always returns Status:OK().
@@ -124,4 +117,4 @@ class Scope::Impl {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CC_FRAMEWORK_SCOPE_INTERNAL_H_

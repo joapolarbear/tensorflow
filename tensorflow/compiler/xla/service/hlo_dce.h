@@ -33,10 +33,10 @@ namespace xla {
 //
 // This pass does not remove dead parameter instructions, as parameter
 // instructions cannot be deleted.
-class HloDCE : public HloModulePass {
+class HloDCE : public HloPassInterface {
  public:
   ~HloDCE() override {}
-  absl::string_view name() const override { return "dce"; }
+  tensorflow::StringPiece name() const override { return "dce"; }
 
   // Run the pass on the given module. Returns whether the module was changed
   // (instructions were removed).

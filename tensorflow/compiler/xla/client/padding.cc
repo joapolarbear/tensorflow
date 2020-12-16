@@ -23,15 +23,16 @@ limitations under the License.
 
 namespace xla {
 
-Status ValidatePaddingValues(absl::Span<const int64> input_dimensions,
-                             absl::Span<const int64> window_dimensions,
-                             absl::Span<const int64> window_strides) {
+Status ValidatePaddingValues(
+    tensorflow::gtl::ArraySlice<int64> input_dimensions,
+    tensorflow::gtl::ArraySlice<int64> window_dimensions,
+    tensorflow::gtl::ArraySlice<int64> window_strides) {
   bool ok = input_dimensions.size() == window_dimensions.size() &&
             input_dimensions.size() == window_strides.size();
   if (!ok) {
     return InvalidArgument(
-        "Want input dimensions size %u = window dimensions size %u = window "
-        "strides size %u",
+        "Want input dimensions size %zu = window dimensions size %zu = window "
+        "strides size %zu",
         input_dimensions.size(), window_dimensions.size(),
         window_strides.size());
   }
@@ -39,9 +40,9 @@ Status ValidatePaddingValues(absl::Span<const int64> input_dimensions,
 }
 
 std::vector<std::pair<int64, int64>> MakePadding(
-    absl::Span<const int64> input_dimensions,
-    absl::Span<const int64> window_dimensions,
-    absl::Span<const int64> window_strides, Padding padding) {
+    tensorflow::gtl::ArraySlice<int64> input_dimensions,
+    tensorflow::gtl::ArraySlice<int64> window_dimensions,
+    tensorflow::gtl::ArraySlice<int64> window_strides, Padding padding) {
   TF_CHECK_OK(ValidatePaddingValues(input_dimensions, window_dimensions,
                                     window_strides));
   std::vector<std::pair<int64, int64>> low_high_padding;

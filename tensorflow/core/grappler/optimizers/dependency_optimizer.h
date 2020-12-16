@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_
-#define TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_
+#ifndef THIRD_PARTY_TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_
+#define THIRD_PARTY_TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_
 
 #include <unordered_set>
 #include "tensorflow/core/grappler/optimizers/graph_optimizer.h"
@@ -29,13 +29,12 @@ namespace grappler {
 // optimizations, such as removing nodes that are effectively noops.
 class DependencyOptimizer : public GraphOptimizer {
  public:
-  DependencyOptimizer() {}
-  explicit DependencyOptimizer(RewriterConfig::Toggle opt_level) {}
+  DependencyOptimizer() : opt_level_(RewriterConfig::ON) {}
+  explicit DependencyOptimizer(RewriterConfig::Toggle opt_level)
+      : opt_level_(opt_level) {}
   ~DependencyOptimizer() override {}
 
   string name() const override { return "dependency_optimizer"; };
-
-  bool UsesFunctionLibrary() const override { return false; }
 
   Status Optimize(Cluster* cluster, const GrapplerItem& item,
                   GraphDef* optimized_graph) override;
@@ -44,22 +43,14 @@ class DependencyOptimizer : public GraphOptimizer {
                 const GraphDef& optimized_graph, double result) override;
 
  private:
-  // Returns true if bypassing node does not increase the number of edges or
-  // number of edges crossing a device boundary.
-  bool BypassingNodeIsBeneficial(
-      const NodeDef& node, const std::vector<NodeDef*>& input_nodes,
-      const std::vector<NodeDef*>& output_nodes) const;
-  int NumEdgesIfBypassed(const NodeDef& node,
-                         const std::vector<NodeDef*>& output_nodes) const;
-  // Returns true if node is not an Identity node or if it is an Identity
-  // that is safe to remove.
-  bool SafeToRemoveIdentity(const NodeDef& node) const;
   // Returns true if it is safe to convert node to NoOp.
-  bool SafeToConvertToNoOp(const NodeDef& node) const;
+  bool SafeToConvertToNoOp(const NodeDef& node);
   // Removes all duplicate control dependencies.
   void CleanControlInputs();
   // Builds a map from the &optimized_graph_->node(i) to i.
   void BuildNodeToIdx();
+  // Removes the given set of nodes from the graph.
+  void DeleteNodes(const std::set<int>& nodes_to_delete);
   // Tries to optimize the node with the given index, possibly additional
   // optimizations by inserting nodes in nodes_to_simplify, and pruning nodes by
   // inserting them in nodes_to_delete.
@@ -70,10 +61,8 @@ class DependencyOptimizer : public GraphOptimizer {
   Status TransitiveReduction();
   // Main driver of dependency optimizations.
   Status OptimizeDependencies();
-  // Replaces multiple cross-device control edges from the same device with a
-  // single control edge.
-  void GroupCrossDeviceControlEdges();
 
+  RewriterConfig::Toggle opt_level_;
   bool fetch_nodes_known_;
   std::unordered_set<string> nodes_to_preserve_;
   std::unique_ptr<NodeMap> node_map_;
@@ -84,4 +73,4 @@ class DependencyOptimizer : public GraphOptimizer {
 }  // end namespace grappler
 }  // end namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_
+#endif  // THIRD_PARTY_TENSORFLOW_CORE_GRAPPLER_OPTIMIZERS_DEPENDENCY_OPTIMIZER_H_

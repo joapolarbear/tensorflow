@@ -38,12 +38,6 @@ def func3(args, a=None, b=1, c=2):
   """Some cool doc string."""
   return (args, a, b, c)
 
-@add_arg_scope
-def func4(x='x', y='y'):
-  if x:
-    pass
-  if y:
-    pass
 
 def _key_op(op):
   return getattr(op, '_key_op', str(op))
@@ -52,7 +46,7 @@ def _key_op(op):
 class ArgScopeTest(test.TestCase):
 
   def testEmptyArgScope(self):
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([]) as sc:
         self.assertEqual(sc, {})
 
@@ -60,7 +54,7 @@ class ArgScopeTest(test.TestCase):
     func1_kwargs = {'a': 1, 'b': None, 'c': [1]}
     key_op = _key_op(func1)
     func1_scope = {key_op: func1_kwargs.copy()}
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]) as sc1:
         self.assertEqual(sc1, func1_scope)
         with arg_scope({}) as sc2:
@@ -86,7 +80,7 @@ class ArgScopeTest(test.TestCase):
     func1_kwargs = {'a': 1, 'b': None, 'c': [1]}
     key_op = _key_op(func1)
     current_scope = {key_op: func1_kwargs.copy()}
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]) as scope:
         self.assertDictEqual(scope, current_scope)
 
@@ -102,7 +96,7 @@ class ArgScopeTest(test.TestCase):
         key(func1): func1_kwargs.copy(),
         key(func2): func2_kwargs.copy()
     }
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]):
         with arg_scope([func2], b=2, d=[2]) as scope:
           self.assertDictEqual(scope, current_scope)
@@ -111,7 +105,7 @@ class ArgScopeTest(test.TestCase):
     func1_kwargs = {'a': 1, 'b': None, 'c': [1]}
     key_op = _key_op(func1)
     current_scope = {key_op: func1_kwargs.copy()}
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]) as scope1:
         pass
       with arg_scope(scope1) as scope:
@@ -126,7 +120,7 @@ class ArgScopeTest(test.TestCase):
         key(func1): func1_kwargs.copy(),
         key(func2): func2_kwargs.copy()
     }
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]) as scope1:
         with arg_scope([func2], b=2, d=[2]) as scope2:
           pass
@@ -140,7 +134,7 @@ class ArgScopeTest(test.TestCase):
   def testSimpleArgScope(self):
     func1_args = (0,)
     func1_kwargs = {'a': 1, 'b': None, 'c': [1]}
-    with self.cached_session():
+    with self.test_session():
       with arg_scope([func1], a=1, b=None, c=[1]):
         args, kwargs = func1(0)
         self.assertTupleEqual(args, func1_args)
@@ -149,7 +143,7 @@ class ArgScopeTest(test.TestCase):
   def testSimpleArgScopeWithTuple(self):
     func1_args = (0,)
     func1_kwargs = {'a': 1, 'b': None, 'c': [1]}
-    with self.cached_session():
+    with self.test_session():
       with arg_scope((func1,), a=1, b=None, c=[1]):
         args, kwargs = func1(0)
         self.assertTupleEqual(args, func1_args)
@@ -175,30 +169,6 @@ class ArgScopeTest(test.TestCase):
         args, kwargs = func1(0)
         self.assertTupleEqual(args, func1_args)
         self.assertDictEqual(kwargs, func1_kwargs)
-
-  def testNestedArgScopeObjectCreatedOutsideScopeOverridesArgScope(self):
-
-    def get_scope_object():
-      with arg_scope([func1], a=1, b=None, c=[1]) as sc:
-        return sc
-
-    scope_object = get_scope_object()
-    with arg_scope([func1], b=2, d=10):
-      with arg_scope(scope_object):
-        args, kwargs = func1(0)
-        self.assertTupleEqual(args, (0,))
-        self.assertDictEqual(kwargs, {'a': 1, 'b': None, 'c': [1]})
-
-  def testArgScopeObjectCreatedWithinScopeInheritsArgScope(self):
-    def get_scope_object():
-      with arg_scope([func1], a=1, b=None, c=[1]) as sc:
-        return sc
-
-    with arg_scope([func1], b=2, d=10):
-      with arg_scope(get_scope_object()):
-        args, kwargs = func1(0)
-        self.assertTupleEqual(args, (0,))
-        self.assertDictEqual(kwargs, {'a': 1, 'b': None, 'c': [1], 'd': 10})
 
   def testSharedArgScope(self):
     func1_args = (0,)
@@ -236,15 +206,6 @@ class ArgScopeTest(test.TestCase):
           args, kwargs = func2(1)
           self.assertTupleEqual(args, func2_args)
           self.assertDictEqual(kwargs, func2_kwargs)
-
-  def testAddArgScopeRaceCondition(self):
-    func4_kwargs = ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')
-    for i in range(4):
-      # redefine the function with different args
-      @add_arg_scope
-      def func4(a=1, b=2, c=3, d=4, e=5, f=6, g=7, h=8):
-        pass
-      self.assertTupleEqual(arg_scoped_arguments(func4), func4_kwargs)
 
   def testDocString(self):
     self.assertEqual(func3.__doc__, 'Some cool doc string.')

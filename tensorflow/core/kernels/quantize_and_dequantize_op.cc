@@ -15,10 +15,9 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 #define EIGEN_USE_GPU
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #include "tensorflow/core/kernels/quantize_and_dequantize_op.h"
 
@@ -50,22 +49,6 @@ class QuantizeAndDequantizeV2Op : public OpKernel {
                 errors::InvalidArgument("num_bits is out of range: ", num_bits_,
                                         " with signed_input_ ", signed_input_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("range_given", &range_given_));
-
-    string round_mode_string;
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("round_mode", &round_mode_string));
-    OP_REQUIRES(
-        ctx,
-        (round_mode_string == "HALF_UP" || round_mode_string == "HALF_TO_EVEN"),
-        errors::InvalidArgument("Round mode string must be "
-                                "'HALF_UP' or "
-                                "'HALF_TO_EVEN', is '" +
-                                round_mode_string + "'"));
-    if (round_mode_string == "HALF_UP") {
-      round_mode_ = ROUND_HALF_UP;
-    } else if (round_mode_string == "HALF_TO_EVEN") {
-      round_mode_ = ROUND_HALF_TO_EVEN;
-    }
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("narrow_range", &narrow_range_));
   }
 
   void Compute(OpKernelContext* ctx) override {
@@ -93,16 +76,13 @@ class QuantizeAndDequantizeV2Op : public OpKernel {
 
     functor::QuantizeAndDequantizeOneScaleFunctor<Device, T> f;
     f(ctx->eigen_device<Device>(), input.flat<T>(), signed_input_, num_bits_,
-      range_given_, &input_min_tensor, &input_max_tensor, round_mode_,
-      narrow_range_, output->flat<T>());
+      range_given_, &input_min_tensor, &input_max_tensor, output->flat<T>());
   }
 
  private:
   bool signed_input_;
   int num_bits_;
   bool range_given_;
-  QuantizerRoundMode round_mode_;
-  bool narrow_range_;
 };
 
 // Simulate quantization precision loss in a float tensor by:
@@ -119,7 +99,6 @@ class QuantizeAndDequantizeV3Op : public OpKernel {
       : OpKernel(ctx) {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("signed_input", &signed_input_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("range_given", &range_given_));
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("narrow_range", &narrow_range_));
   }
 
   void Compute(OpKernelContext* ctx) override {
@@ -156,14 +135,12 @@ class QuantizeAndDequantizeV3Op : public OpKernel {
 
     functor::QuantizeAndDequantizeOneScaleFunctor<Device, T> f;
     f(ctx->eigen_device<Device>(), input.flat<T>(), signed_input_, num_bits_val,
-      range_given_, &input_min_tensor, &input_max_tensor, ROUND_HALF_TO_EVEN,
-      narrow_range_, output->flat<T>());
+      range_given_, &input_min_tensor, &input_max_tensor, output->flat<T>());
   }
 
  private:
   bool signed_input_;
   bool range_given_;
-  bool narrow_range_;
 };
 
 // DEPRECATED: Use QuantizeAndDequantizeV2Op.
@@ -203,7 +180,7 @@ class QuantizeAndDequantizeOp : public OpKernel {
     functor::QuantizeAndDequantizeOneScaleFunctor<Device, T> functor;
     functor(ctx->eigen_device<Device>(), input.flat<T>(), signed_input_,
             num_bits_, range_given_, &input_min_tensor, &input_max_tensor,
-            ROUND_HALF_TO_EVEN, /*narrow_range=*/false, output->flat<T>());
+            output->flat<T>());
   }
 
  private:
@@ -221,11 +198,10 @@ struct QuantizeAndDequantizeOneScaleFunctor<CPUDevice, T> {
   void operator()(const CPUDevice& d, typename TTypes<T>::ConstVec input,
                   const bool signed_input, const int num_bits,
                   const bool range_given, Tensor* input_min_tensor,
-                  Tensor* input_max_tensor, QuantizerRoundMode round_mode,
-                  bool narrow_range, typename TTypes<T>::Vec out) {
+                  Tensor* input_max_tensor, typename TTypes<T>::Vec out) {
     QuantizeAndDequantizeOneScaleImpl<CPUDevice, T>::Compute(
         d, input, signed_input, num_bits, range_given, input_min_tensor,
-        input_max_tensor, round_mode, narrow_range, out);
+        input_max_tensor, out);
   }
 };
 }  // namespace functor
@@ -246,8 +222,7 @@ TF_CALL_float(REGISTER_CPU_KERNEL);
 TF_CALL_double(REGISTER_CPU_KERNEL);
 #undef REGISTER_CPU_KERNEL
 
-#if (defined(GOOGLE_CUDA) && GOOGLE_CUDA) || \
-    (defined(TENSORFLOW_USE_ROCM) && TENSORFLOW_USE_ROCM)
+#if GOOGLE_CUDA
 #define REGISTER_GPU_KERNEL(T)                                                 \
   REGISTER_KERNEL_BUILDER(Name("QuantizeAndDequantizeV2")                      \
                               .Device(DEVICE_GPU)                              \
@@ -268,5 +243,5 @@ TF_CALL_double(REGISTER_CPU_KERNEL);
 TF_CALL_float(REGISTER_GPU_KERNEL);
 TF_CALL_double(REGISTER_GPU_KERNEL);
 #undef REGISTER_GPU_KERNEL
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif
 }  // namespace tensorflow

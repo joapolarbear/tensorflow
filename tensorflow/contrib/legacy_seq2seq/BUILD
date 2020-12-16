@@ -2,14 +2,13 @@
 #   Contains library to create sequence-to-sequence models on top of TensorFlow.
 #   APIs here are meant to evolve over time.
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_tests")
-
-package(
-    default_visibility = ["//visibility:public"],
-    licenses = ["notice"],  # Apache 2.0
-)
+licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
+
+package(default_visibility = ["//visibility:public"])
+
+load("//tensorflow:tensorflow.bzl", "cuda_py_tests")
 
 py_library(
     name = "seq2seq_py",
@@ -59,8 +58,17 @@ cuda_py_tests(
         "//tensorflow/python:variable_scope",
         "//tensorflow/python:variables",
     ],
-    tags = [
-        "noasan",  # times out b/63678675
-        "optonly",  # times out (flaky)
-    ],
+    tags = ["noasan"],  # times out b/63678675
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

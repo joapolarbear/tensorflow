@@ -19,7 +19,8 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/status_macros.h"
 
-namespace stream_executor {
+namespace perftools {
+namespace gputools {
 namespace interpreter {
 
 host::HostStream *AsExecutorStream(Stream *stream) {
@@ -27,91 +28,84 @@ host::HostStream *AsExecutorStream(Stream *stream) {
   return dynamic_cast<host::HostStream *>(stream->implementation());
 }
 
-XlaInterpreterExecutor::XlaInterpreterExecutor(
-    const PluginConfig &plugin_config)
+InterpreterExecutor::InterpreterExecutor(const PluginConfig &plugin_config)
     : plugin_config_(plugin_config) {}
 
-XlaInterpreterExecutor::~XlaInterpreterExecutor() {}
+InterpreterExecutor::~InterpreterExecutor() {}
 
-void *XlaInterpreterExecutor::Allocate(uint64 size) { return new char[size]; }
+void *InterpreterExecutor::Allocate(uint64 size) { return new char[size]; }
 
-void *XlaInterpreterExecutor::GetSubBuffer(DeviceMemoryBase *parent,
-                                           uint64 offset_bytes,
-                                           uint64 /*size_bytes*/) {
+void *InterpreterExecutor::AllocateSubBuffer(DeviceMemoryBase *parent,
+                                             uint64 offset_bytes,
+                                             uint64 /*size_bytes*/) {
   return parent + offset_bytes;
 }
 
-void XlaInterpreterExecutor::Deallocate(DeviceMemoryBase *mem) {
-  delete[] static_cast<char *>(mem->opaque());
+void InterpreterExecutor::Deallocate(DeviceMemoryBase *mem) {
+  if (!mem->is_sub_buffer()) {
+    delete[] static_cast<char *>(mem->opaque());
+  }
 }
 
-bool XlaInterpreterExecutor::Memcpy(Stream *stream, void *host_dst,
-                                    const DeviceMemoryBase &dev_src,
-                                    uint64 size) {
+bool InterpreterExecutor::Memcpy(Stream *stream, void *host_dst,
+                                 const DeviceMemoryBase &dev_src, uint64 size) {
   AsExecutorStream(stream)->EnqueueTask([this, host_dst, dev_src, size]() {
     port::Status ok = SynchronousMemcpy(host_dst, dev_src, size);
   });
-  AsExecutorStream(stream)->BlockUntilDone();
   return true;
 }
 
-bool XlaInterpreterExecutor::Memcpy(Stream *stream, DeviceMemoryBase *dev_dst,
-                                    const void *host_src, uint64 size) {
+bool InterpreterExecutor::Memcpy(Stream *stream, DeviceMemoryBase *dev_dst,
+                                 const void *host_src, uint64 size) {
   AsExecutorStream(stream)->EnqueueTask([this, dev_dst, host_src, size]() {
     port::Status ok = SynchronousMemcpy(dev_dst, host_src, size);
   });
-  AsExecutorStream(stream)->BlockUntilDone();
   return true;
 }
 
-port::Status XlaInterpreterExecutor::SynchronousMemcpy(
-    DeviceMemoryBase *dev_dst, const void *host_src, uint64 size) {
+port::Status InterpreterExecutor::SynchronousMemcpy(DeviceMemoryBase *dev_dst,
+                                                    const void *host_src,
+                                                    uint64 size) {
   memcpy(dev_dst->opaque(), host_src, size);
   return port::Status::OK();
 }
 
-port::Status XlaInterpreterExecutor::SynchronousMemcpy(
+port::Status InterpreterExecutor::SynchronousMemcpy(
     void *host_dst, const DeviceMemoryBase &dev_src, uint64 size) {
   memcpy(host_dst, dev_src.opaque(), size);
   return port::Status::OK();
 }
 
-bool XlaInterpreterExecutor::HostCallback(
-    Stream *stream, std::function<port::Status()> callback) {
-  AsExecutorStream(stream)->EnqueueTask([callback]() {
-    port::Status s = callback();
-    if (!s.ok()) {
-      LOG(WARNING) << "Host callback failed: " << s;
-    }
-  });
+bool InterpreterExecutor::HostCallback(Stream *stream,
+                                       std::function<void()> callback) {
+  AsExecutorStream(stream)->EnqueueTask(callback);
   return true;
 }
 
-bool XlaInterpreterExecutor::CreateStreamDependency(Stream *dependent,
-                                                    Stream *other) {
+bool InterpreterExecutor::CreateStreamDependency(Stream *dependent,
+                                                 Stream *other) {
   AsExecutorStream(dependent)->EnqueueTask(
       [other]() { SE_CHECK_OK(other->BlockHostUntilDone()); });
   AsExecutorStream(dependent)->BlockUntilDone();
   return true;
 }
 
-bool XlaInterpreterExecutor::StartTimer(Stream *stream, Timer *timer) {
+bool InterpreterExecutor::StartTimer(Stream *stream, Timer *timer) {
   dynamic_cast<host::HostTimer *>(timer->implementation())->Start(stream);
   return true;
 }
 
-bool XlaInterpreterExecutor::StopTimer(Stream *stream, Timer *timer) {
+bool InterpreterExecutor::StopTimer(Stream *stream, Timer *timer) {
   dynamic_cast<host::HostTimer *>(timer->implementation())->Stop(stream);
   return true;
 }
 
-port::Status XlaInterpreterExecutor::BlockHostUntilDone(Stream *stream) {
+port::Status InterpreterExecutor::BlockHostUntilDone(Stream *stream) {
   AsExecutorStream(stream)->BlockUntilDone();
   return port::Status::OK();
 }
 
-port::StatusOr<std::unique_ptr<DeviceDescription>>
-XlaInterpreterExecutor::CreateDeviceDescription(int device_ordinal) {
+DeviceDescription *InterpreterExecutor::PopulateDeviceDescription() const {
   internal::DeviceDescriptionBuilder builder;
 
   builder.set_device_address_bits(64);
@@ -120,8 +114,9 @@ XlaInterpreterExecutor::CreateDeviceDescription(int device_ordinal) {
   builder.set_device_memory_size(static_cast<uint64>(4) * 1024 * 1024 * 1024);
   builder.set_clock_rate_ghz(static_cast<float>(CLOCKS_PER_SEC) / 1e9);
 
-  return builder.Build();
+  return builder.Build().release();
 }
 
 }  // namespace interpreter
-}  // namespace stream_executor
+}  // namespace gputools
+}  // namespace perftools

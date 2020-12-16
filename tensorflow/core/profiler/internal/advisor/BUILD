@@ -1,9 +1,10 @@
-load("//tensorflow:tensorflow.bzl", "tf_cc_test")
-
 package(
     default_visibility = ["//tensorflow:internal"],
-    licenses = ["notice"],  # Apache 2.0
 )
+
+licenses(["notice"])  # Apache 2.0
+
+load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 
 cc_library(
     name = "checker",
@@ -71,4 +72,19 @@ tf_cc_test(
         "//tensorflow/core:test",
         "//tensorflow/core/profiler/internal:tfprof_tf_testlib",
     ],
+)
+
+# -----------------------------------------------------------------------------
+# Google-internal targets.  These must be at the end for syncrepo.
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

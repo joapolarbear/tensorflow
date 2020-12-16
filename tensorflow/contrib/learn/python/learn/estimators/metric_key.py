@@ -12,20 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Enum for metric keys (deprecated).
-
-This module and all its submodules are deprecated. See
-[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
-for migration instructions.
-"""
+"""Enum for metric keys."""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 
 class MetricKey(object):
-  """Metric key strings (deprecated)."""
-  
+  """Metric key strings."""
   LOSS = "loss"
   AUC = "auc"
   AUC_PR = "auc_precision_recall"

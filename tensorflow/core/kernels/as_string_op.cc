@@ -47,7 +47,6 @@ class AsStringOp : public OpKernel {
       case DT_FLOAT:
       case DT_DOUBLE:
       case DT_COMPLEX64:
-      case DT_COMPLEX128:
         break;
       default:
         OP_REQUIRES(ctx, !(scientific || shortest),
@@ -65,33 +64,15 @@ class AsStringOp : public OpKernel {
     OP_REQUIRES(ctx, !(scientific && shortest),
                 errors::InvalidArgument(
                     "Cannot select both scientific and shortest notation"));
-
     format_ = "%";
-    if (!fill_string.empty()) {
-      switch (fill_string[0]) {
-        case ' ':
-        case '+':
-        case '-':
-        case '0':
-        case '#':
-          strings::Appendf(&format_, "%s", fill_string.c_str());
-          break;
-        default:
-          bool fill_not_supported = true;
-          OP_REQUIRES(ctx, !fill_not_supported,
-                      errors::InvalidArgument("Fill argument not supported: \"",
-                                              fill_string, "\""));
-      }
-    }
     if (width > -1) {
-      strings::Appendf(&format_, "%d", width);
+      strings::Appendf(&format_, "%s%d", fill_string.c_str(), width);
     }
     if (precision > -1) {
       strings::Appendf(&format_, ".%d", precision);
     }
     switch (dtype) {
       case DT_INT8:
-      case DT_INT16:
       case DT_INT32:
         strings::Appendf(&format_, "d");
         break;
@@ -101,7 +82,6 @@ class AsStringOp : public OpKernel {
       case DT_FLOAT:
       case DT_DOUBLE:
       case DT_COMPLEX64:
-      case DT_COMPLEX128:
         if (shortest) {
           strings::Appendf(&format_, "g");
         } else if (scientific) {
@@ -119,7 +99,7 @@ class AsStringOp : public OpKernel {
                                             DataTypeString(dtype)));
     }
 
-    if (dtype == DT_COMPLEX64 || dtype == DT_COMPLEX128) {
+    if (dtype == DT_COMPLEX64) {
       format_ = strings::Printf("(%s,%s)", format_.c_str(), format_.c_str());
     }
   }
@@ -133,7 +113,7 @@ class AsStringOp : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output("output", input_tensor->shape(),
                                             &output_tensor));
-    auto output_flat = output_tensor->flat<tstring>();
+    auto output_flat = output_tensor->flat<string>();
 
 #define ENCODE_TYPE(type, T, enc_str)                                     \
   case (type): {                                                          \
@@ -149,7 +129,6 @@ class AsStringOp : public OpKernel {
       ENCODE_TYPE(DT_FLOAT, float, format_);
       ENCODE_TYPE(DT_DOUBLE, double, format_);
       ENCODE_TYPE(DT_INT8, int8, format_);
-      ENCODE_TYPE(DT_INT16, int16, format_);
       case (DT_BOOL): {
         const auto& input_flat = input_tensor->flat<bool>();
         for (int i = 0; i < input_flat.size(); ++i) {
@@ -158,13 +137,6 @@ class AsStringOp : public OpKernel {
       } break;
       case (DT_COMPLEX64): {
         const auto& input_flat = input_tensor->flat<complex64>();
-        for (int i = 0; i < input_flat.size(); ++i) {
-          output_flat(i) = strings::Printf(
-              format_.c_str(), input_flat(i).real(), input_flat(i).imag());
-        }
-      } break;
-      case (DT_COMPLEX128): {
-        const auto& input_flat = input_tensor->flat<complex128>();
         for (int i = 0; i < input_flat.size(); ++i) {
           output_flat(i) = strings::Printf(
               format_.c_str(), input_flat(i).real(), input_flat(i).imag());

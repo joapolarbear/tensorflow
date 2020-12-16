@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
+
 """Notebook front-end to TensorFlow.
 
 When you run this binary, you'll see something like below, which indicates
@@ -42,7 +43,9 @@ from tensorflow.python.platform import app
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "cpp"
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION"] = "2"
 
+
 FLAGS = None
+
 
 ORIG_ARGV = sys.argv
 # Main notebook process calls itself with argv[1]="kernel" to start kernel
@@ -70,8 +73,8 @@ def main(unused_argv):
       notebookapp.ip = "0.0.0.0"
       notebookapp.password = passwd(FLAGS.password)
     else:
-      print("\nNo password specified; Notebook server will only be available"
-            " on the local machine.\n")
+      print ("\nNo password specified; Notebook server will only be available"
+             " on the local machine.\n")
     notebookapp.initialize(argv=["--notebook-dir", FLAGS.notebook_dir])
 
     if notebookapp.ip == "0.0.0.0":
@@ -122,8 +125,8 @@ if __name__ == "__main__":
   # kernel app.
   if IS_KERNEL:
     # Drop everything except --flagfile.
-    sys.argv = (
-        [sys.argv[0]] + [x for x in sys.argv[1:] if x.startswith("--flagfile")])
+    sys.argv = ([sys.argv[0]] +
+                [x for x in sys.argv[1:] if x.startswith("--flagfile")])
 
   FLAGS, unparsed = parser.parse_known_args()
   app.run(main=main, argv=[sys.argv[0]] + unparsed)

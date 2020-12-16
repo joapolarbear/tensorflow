@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <utility>
 
+#include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/graph/tensor_id.h"
 #include "tensorflow/core/lib/core/errors.h"
 
@@ -44,12 +45,12 @@ GraphDefBuilder::Options GraphDefBuilder::Options::WithControlInputs(
 }
 GraphDefBuilder::Options GraphDefBuilder::Options::WithNameImpl(
     StringPiece name) {
-  name_ = string(name);
+  name_ = name.ToString();
   return *this;
 }
 GraphDefBuilder::Options GraphDefBuilder::Options::WithDeviceImpl(
     StringPiece device) {
-  device_ = string(device);
+  device_ = device.ToString();
   return *this;
 }
 GraphDefBuilder::Options GraphDefBuilder::Options::WithControlInputImpl(
@@ -67,6 +68,16 @@ GraphDefBuilder::Options GraphDefBuilder::Options::WithControlInputsImpl(
 Status GraphDefBuilder::ToGraphDef(GraphDef* graph_def) const {
   if (status_.ok()) {
     graph_.ToGraphDef(graph_def);
+  }
+  return status_;
+}
+
+Status GraphDefBuilder::ToGraph(Graph* graph) const {
+  if (status_.ok()) {
+    GraphDef graph_def;
+    graph_.ToGraphDef(&graph_def);
+    GraphConstructorOptions opts;
+    TF_RETURN_IF_ERROR(ConvertGraphDefToGraph(opts, graph_def, graph));
   }
   return status_;
 }

@@ -75,7 +75,7 @@ StatusOr<bool> ReducePrecisionInsertion::insert_after(
     return false;
   }
 
-  // Check that we haven't already inserted an equivalent reduce-precision
+  // Check that we haven't already inserted an equivalant reduce-precision
   // operation after this instruction.  (The zero-user case occurs when this is
   // the root instruction.)
   if (instruction->user_count() > 0) {
@@ -111,7 +111,7 @@ StatusOr<bool> ReducePrecisionInsertion::insert_on_inputs(
       VLOG(2) << "Adding to operand " << i << ": " << operand;
 
       if (!is_valid_shape(operand->shape())) {
-        VLOG(2) << "Skipped: value is not of type F32";
+        VLOG(2) << "Skipped: value is not an F32 vector";
         continue;
       }
 
@@ -121,7 +121,9 @@ StatusOr<bool> ReducePrecisionInsertion::insert_on_inputs(
         continue;
       }
 
-      if (instruction->IsInputFusion() || instruction->IsLoopFusion()) {
+      if (instruction->opcode() == HloOpcode::kFusion &&
+          (instruction->fusion_kind() == HloInstruction::FusionKind::kLoop ||
+           instruction->fusion_kind() == HloInstruction::FusionKind::kInput)) {
         // Insert the reduce-precision operation inside the fusion computation,
         // after the corresponding parameter instruction.
         TF_ASSIGN_OR_RETURN(
@@ -166,11 +168,13 @@ StatusOr<bool> ReducePrecisionInsertion::insert_on_outputs(
             << instruction->ToString();
 
     if (!is_valid_shape(instruction->shape())) {
-      VLOG(2) << "Skipped: value is not of type F32";
+      VLOG(2) << "Skipped: value is not an F32 nonscalar array";
       continue;
     }
 
-    if (instruction->IsLoopFusion() || instruction->IsOutputFusion()) {
+    if (instruction->opcode() == HloOpcode::kFusion &&
+        (instruction->fusion_kind() == HloInstruction::FusionKind::kLoop ||
+         instruction->fusion_kind() == HloInstruction::FusionKind::kOutput)) {
       // Insert the reduce-precision operation as the last operation inside
       // the fusion computation.
       HloInstruction* fusion_root = instruction->fused_expression_root();

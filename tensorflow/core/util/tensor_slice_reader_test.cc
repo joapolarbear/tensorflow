@@ -22,7 +22,6 @@ limitations under the License.
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 #include "tensorflow/core/lib/io/path.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
@@ -423,7 +422,7 @@ static void VersionTest(const VersionDef& versions, const string& error) {
   // Read it back in and verify that we get the expected error
   TensorSliceReader reader(path, OpenTableTensorSliceReader);
   EXPECT_TRUE(reader.status().code() == error::INVALID_ARGUMENT &&
-              absl::StartsWith(reader.status().error_message(), error))
+              StringPiece(reader.status().error_message()).starts_with(error))
       << "Expected error starting with '" << errors::InvalidArgument(error)
       << "', got '" << reader.status() << "'";
 }

@@ -15,26 +15,25 @@ limitations under the License.
 
 #include "tensorflow/core/kernels/batch_matmul_op_impl.h"
 
-#if GOOGLE_CUDA
-#include "third_party/gpus/cuda/include/cuda.h"
-#endif  // GOOGLE_CUDA
-
 namespace tensorflow {
 
+#if !defined(INTEL_MKL)
 TF_CALL_float(REGISTER_BATCH_MATMUL_CPU);
 TF_CALL_double(REGISTER_BATCH_MATMUL_CPU);
+#endif
 TF_CALL_half(REGISTER_BATCH_MATMUL_CPU);
 TF_CALL_int32(REGISTER_BATCH_MATMUL_CPU);
-TF_CALL_int64(REGISTER_BATCH_MATMUL_CPU);
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 TF_CALL_float(REGISTER_BATCH_MATMUL_GPU);
 TF_CALL_double(REGISTER_BATCH_MATMUL_GPU);
+#if CUDA_VERSION >= 7050
 TF_CALL_half(REGISTER_BATCH_MATMUL_GPU);
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif
+#endif  // GOOGLE_CUDA
 
 #ifdef TENSORFLOW_USE_SYCL
 TF_CALL_float(REGISTER_BATCH_MATMUL_SYCL);
 TF_CALL_double(REGISTER_BATCH_MATMUL_SYCL);
-#endif  // TENSORFLOW_USE_SYCL
+#endif // TENSORFLOW_USE_SYCL
 }  // namespace tensorflow

@@ -31,8 +31,8 @@ limitations under the License.
 #include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
-namespace ops {
-namespace {
+
+using namespace ops;  // NOLINT(build/namespaces)
 
 TEST(SpectrogramOpTest, SimpleTest) {
   Scope root = Scope::NewRootScope();
@@ -101,6 +101,4 @@ TEST(SpectrogramOpTest, SquaredTest) {
       test::AsTensor<float>({0, 1, 4, 1, 0}, TensorShape({1, 1, 5})), 1e-3);
 }
 
-}  // namespace
-}  // namespace ops
 }  // namespace tensorflow

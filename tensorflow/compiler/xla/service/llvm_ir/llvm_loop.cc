@@ -18,55 +18,56 @@ limitations under the License.
 #include <numeric>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/strings/str_cat.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/types.h"
+#include "tensorflow/compiler/xla/xla_data.pb.h"
+#include "tensorflow/core/lib/strings/strcat.h"
+#include "tensorflow/core/lib/strings/stringprintf.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace xla {
 namespace llvm_ir {
 
-ForLoop::ForLoop(absl::string_view prefix, absl::string_view suffix,
+ForLoop::ForLoop(tensorflow::StringPiece prefix, tensorflow::StringPiece suffix,
                  llvm::Value* start_index, llvm::Value* end_index,
-                 llvm::Value* step, UnrollMode unroll_mode,
+                 llvm::Value* step, bool prevent_unrolling,
                  bool prevent_vectorization)
-    : prefix_(prefix),
-      suffix_(suffix),
+    : prefix_(prefix.ToString()),
+      suffix_(suffix.ToString()),
       start_index_(start_index),
       end_index_(end_index),
       step_(step),
       insert_before_bb_(nullptr),
-      unroll_mode_(unroll_mode),
+      prevent_unrolling_(prevent_unrolling),
       prevent_vectorization_(prevent_vectorization) {}
 
 /* static */ std::unique_ptr<ForLoop> ForLoop::EmitForLoop(
-    absl::string_view prefix, llvm::Value* start_index, llvm::Value* end_index,
-    llvm::Value* step, llvm::IRBuilder<>* b, UnrollMode unroll_mode,
-    bool prevent_vectorization) {
+    tensorflow::StringPiece prefix, llvm::Value* start_index,
+    llvm::Value* end_index, llvm::Value* step, llvm::IRBuilder<>* ir_builder,
+    bool prevent_unrolling, bool prevent_vectorization) {
   std::unique_ptr<ForLoop> loop(new ForLoop(prefix, /*suffix=*/"", start_index,
-                                            end_index, step, unroll_mode,
+                                            end_index, step, prevent_unrolling,
                                             prevent_vectorization));
-  loop->Emit(b);
+  loop->Emit(ir_builder);
   return loop;
 }
 
-void ForLoop::Emit(llvm::IRBuilder<>* b) {
+void ForLoop::Emit(llvm::IRBuilder<>* ir_builder) {
   // The preheader block is the block the builder is currently emitting
   // code into.
-  preheader_bb_ = b->GetInsertBlock();
+  preheader_bb_ = ir_builder->GetInsertBlock();
 
-  llvm::BasicBlock::iterator insert_point = b->GetInsertPoint();
+  llvm::BasicBlock::iterator insert_point = ir_builder->GetInsertPoint();
   if (insert_point == preheader_bb_->end()) {
     // We're emitting the loop at the end of a basic block. Verify there is no
     // terminator (eg, branch) in the basic block.
     CHECK_EQ(nullptr, preheader_bb_->getTerminator());
 
-    exit_bb_ = CreateLoopBB("loop_exit", b);
+    exit_bb_ = CreateLoopBB("loop_exit", ir_builder);
   } else {
     // We're emitting the loop into the middle of a basic block. splitBasicBlock
     // requires that this basic block be well-formed (have a terminator).
@@ -74,8 +75,8 @@ void ForLoop::Emit(llvm::IRBuilder<>* b) {
 
     // Split the preheader to create an exit basic block. The exit basic block
     // will contain all instructions at or after insert_point.
-    exit_bb_ = preheader_bb_->splitBasicBlock(insert_point,
-                                              GetQualifiedName("loop_exit"));
+    exit_bb_ = preheader_bb_->splitBasicBlock(
+        insert_point, AsStringRef(GetQualifiedName("loop_exit")));
 
     // splitBasicBlock adds an unconditional branch between the split basic
     // blocks. Remove it. An unconditional branch will be added below from the
@@ -85,48 +86,51 @@ void ForLoop::Emit(llvm::IRBuilder<>* b) {
   insert_before_bb_ = exit_bb_;
 
   // Create remaining basic block which form the inside of the loop.
-  header_bb_ = CreateLoopBB("loop_header", b);
-  body_bb_ = CreateLoopBB("loop_body", b);
+  header_bb_ = CreateLoopBB("loop_header", ir_builder);
+  body_bb_ = CreateLoopBB("loop_body", ir_builder);
 
   // Function entry basic block.
   // Emit alloca for the induction variable. We do this at the entry to the
   // basic block to ensure the alloc only executes once per function (we could
   // be emitting a nested loop).
   llvm::Function* func = preheader_bb_->getParent();
-  b->SetInsertPoint(&func->getEntryBlock(),
-                    func->getEntryBlock().getFirstInsertionPt());
-  llvm::Value* indvar_address = b->CreateAlloca(
-      start_index_->getType(), nullptr, GetQualifiedName("invar_address"));
+  ir_builder->SetInsertPoint(&func->getEntryBlock(),
+                             func->getEntryBlock().getFirstInsertionPt());
+  llvm::Value* indvar_address =
+      ir_builder->CreateAlloca(ir_builder->getInt64Ty(), nullptr,
+                               AsStringRef(GetQualifiedName("invar_address")));
 
   // Preheader basic block.
   // Initialize induction variable starting index. Create branch to the header.
-  b->SetInsertPoint(preheader_bb_);
-  b->CreateStore(start_index_, indvar_address);
+  ir_builder->SetInsertPoint(preheader_bb_);
+  ir_builder->CreateStore(start_index_, indvar_address);
   // The preheader should not have a branch yet.
   CHECK_EQ(preheader_bb_->getTerminator(), nullptr);
-  b->CreateBr(header_bb_);
+  ir_builder->CreateBr(header_bb_);
 
   // Header basic block.
   // Emit the loop conditional branch. Load and compare indvar with ending
   // index and jump to loop exit if equal. Jump to body otherwise.
-  b->SetInsertPoint(header_bb_);
-  indvar_ = b->CreateLoad(indvar_address, GetQualifiedName("indvar"));
-  llvm::Value* exit_cond = b->CreateICmpUGE(indvar_, end_index_);
-  b->CreateCondBr(/*Cond=*/exit_cond,
-                  /*True=*/exit_bb_, /*False=*/body_bb_);
+  ir_builder->SetInsertPoint(header_bb_);
+  indvar_ = ir_builder->CreateLoad(indvar_address,
+                                   AsStringRef(GetQualifiedName("indvar")));
+  llvm::Value* exit_cond = ir_builder->CreateICmpUGE(indvar_, end_index_);
+  ir_builder->CreateCondBr(/*Cond=*/exit_cond,
+                           /*True=*/exit_bb_, /*False=*/body_bb_);
 
   // Body basic block.
   // Increment indvar, store indvar, and jump to header.
-  b->SetInsertPoint(body_bb_);
+  ir_builder->SetInsertPoint(body_bb_);
   llvm::Value* step = step_;
   llvm::Value* indvar = indvar_;
 
-  llvm::Value* indvar_inc = b->CreateAdd(indvar, step, "invar.inc",
-                                         /*HasNUW=*/true, /*HasNSW=*/true);
-  b->CreateStore(indvar_inc, indvar_address);
-  llvm::BranchInst* back_branch = b->CreateBr(header_bb_);
+  llvm::Value* indvar_inc =
+      ir_builder->CreateAdd(indvar, step, "invar.inc",
+                            /*HasNUW=*/true, /*HasNSW=*/true);
+  ir_builder->CreateStore(indvar_inc, indvar_address);
+  llvm::BranchInst* back_branch = ir_builder->CreateBr(header_bb_);
 
-  std::vector<llvm::Metadata*> loop_metadata = GetLoopMetadata(b);
+  std::vector<llvm::Metadata*> loop_metadata = GetLoopMetadata(ir_builder);
   if (!loop_metadata.empty()) {
     llvm::LLVMContext* ctx = &start_index_->getContext();
     auto temp_node = llvm::MDNode::getTemporary(*ctx, llvm::None);
@@ -137,17 +141,17 @@ void ForLoop::Emit(llvm::IRBuilder<>* b) {
   }
 
   // Re-point the IR builder to the loop exit block.
-  b->SetInsertPoint(exit_bb_);
+  ir_builder->SetInsertPoint(exit_bb_);
 }
 
-std::vector<llvm::Metadata*> ForLoop::GetLoopMetadata(llvm::IRBuilder<>* b) {
+std::vector<llvm::Metadata*> ForLoop::GetLoopMetadata(
+    llvm::IRBuilder<>* ir_builder) {
   const char* const kLlvmLoopUnrollDisableMDName = "llvm.loop.unroll.disable";
-  const char* const kLlvmLoopUnrollFullMDName = "llvm.loop.unroll.full";
   const char* const kLlvmLoopVectorizeMDName = "llvm.loop.vectorize.enable";
   llvm::LLVMContext* ctx = &start_index_->getContext();
 
   std::vector<llvm::Metadata*> result;
-  if (unroll_mode_ == xla::llvm_ir::UnrollMode::kNoUnroll) {
+  if (prevent_unrolling_) {
     result.push_back(llvm::MDNode::get(
         *ctx, {llvm::MDString::get(*ctx, kLlvmLoopUnrollDisableMDName)}));
   }
@@ -155,45 +159,45 @@ std::vector<llvm::Metadata*> ForLoop::GetLoopMetadata(llvm::IRBuilder<>* b) {
   if (prevent_vectorization_) {
     result.push_back(llvm::MDNode::get(
         *ctx, {llvm::MDString::get(*ctx, kLlvmLoopVectorizeMDName),
-               llvm::ConstantAsMetadata::get(b->getFalse())}));
+               llvm::ConstantAsMetadata::get(ir_builder->getFalse())}));
   }
 
-  if (unroll_mode_ == xla::llvm_ir::UnrollMode::kFullyUnroll) {
-    result.push_back(llvm::MDNode::get(
-        *ctx, {llvm::MDString::get(*ctx, kLlvmLoopUnrollFullMDName)}));
-  }
   return result;
 }
 
-string ForLoop::GetQualifiedName(absl::string_view name) {
+string ForLoop::GetQualifiedName(tensorflow::StringPiece name) {
   return llvm_ir::IrName(prefix_, llvm_ir::IrName(name, suffix_));
 }
 
-llvm::BasicBlock* ForLoop::CreateLoopBB(absl::string_view name,
-                                        llvm::IRBuilder<>* b) {
-  return CreateBasicBlock(insert_before_bb_, GetQualifiedName(name), b);
+llvm::BasicBlock* ForLoop::CreateLoopBB(tensorflow::StringPiece name,
+                                        llvm::IRBuilder<>* ir_builder) {
+  return CreateBasicBlock(insert_before_bb_, GetQualifiedName(name),
+                          ir_builder);
 }
 
-std::unique_ptr<ForLoop> ForLoopNest::AddLoop(absl::string_view suffix,
+std::unique_ptr<ForLoop> ForLoopNest::AddLoop(tensorflow::StringPiece suffix,
                                               llvm::Value* start_index,
                                               llvm::Value* end_index,
-                                              UnrollMode unroll_mode,
+                                              bool prevent_unrolling,
                                               bool prevent_vectorization) {
-  return AddLoop(suffix, start_index, end_index, GetConstantWithIndexType(1),
-                 unroll_mode, prevent_vectorization);
+  return AddLoop(suffix, start_index, end_index, ir_builder_->getInt64(1),
+                 prevent_unrolling, prevent_vectorization);
 }
 
-std::unique_ptr<ForLoop> ForLoopNest::AddLoop(
-    absl::string_view suffix, llvm::Value* start_index, llvm::Value* end_index,
-    llvm::Value* stride, UnrollMode unroll_mode, bool prevent_vectorization) {
+std::unique_ptr<ForLoop> ForLoopNest::AddLoop(tensorflow::StringPiece suffix,
+                                              llvm::Value* start_index,
+                                              llvm::Value* end_index,
+                                              llvm::Value* stride,
+                                              bool prevent_unrolling,
+                                              bool prevent_vectorization) {
   if (inner_loop_body_bb_ != nullptr) {
     // Create this loop inside the previous one.
-    b_->SetInsertPoint(&*inner_loop_body_bb_->getFirstInsertionPt());
+    ir_builder_->SetInsertPoint(&*inner_loop_body_bb_->getFirstInsertionPt());
   }
   std::unique_ptr<ForLoop> loop(new ForLoop(
-      /*prefix=*/name_, suffix, start_index, end_index, stride, unroll_mode,
-      prevent_vectorization));
-  loop->Emit(b_);
+      /*prefix=*/name_, suffix, start_index, end_index, stride,
+      prevent_unrolling, prevent_vectorization));
+  loop->Emit(ir_builder_);
 
   if (outer_loop_preheader_bb_ == nullptr) {
     outer_loop_preheader_bb_ = loop->GetPreheaderBasicBlock();
@@ -210,80 +214,47 @@ std::unique_ptr<ForLoop> ForLoopNest::AddLoop(
 
 std::unique_ptr<ForLoop> ForLoopNest::AddLoop(int64 start_index,
                                               int64 end_index,
-                                              absl::string_view suffix,
-                                              UnrollMode unroll_mode,
+                                              tensorflow::StringPiece suffix,
+                                              bool prevent_unrolling,
                                               bool prevent_vectorization) {
   CHECK_LE(start_index, end_index);
-  return AddLoop(suffix, GetConstantWithIndexType(start_index),
-                 GetConstantWithIndexType(end_index), unroll_mode,
+  return AddLoop(suffix, ir_builder_->getInt64(start_index),
+                 ir_builder_->getInt64(end_index), prevent_unrolling,
                  prevent_vectorization);
 }
 
 std::unique_ptr<ForLoop> ForLoopNest::AddLoop(int64 start_index,
                                               int64 end_index, int64 stride,
-                                              absl::string_view suffix,
-                                              UnrollMode unroll_mode,
+                                              tensorflow::StringPiece suffix,
+                                              bool prevent_unrolling,
                                               bool prevent_vectorization) {
   CHECK_LE(start_index, end_index);
-  return AddLoop(suffix, GetConstantWithIndexType(start_index),
-                 GetConstantWithIndexType(end_index),
-                 GetConstantWithIndexType(stride), unroll_mode,
+  return AddLoop(suffix, ir_builder_->getInt64(start_index),
+                 ir_builder_->getInt64(end_index),
+                 ir_builder_->getInt64(stride), prevent_unrolling,
                  prevent_vectorization);
 }
 
 IrArray::Index ForLoopNest::AddLoopsForShape(const Shape& shape,
-                                             absl::string_view suffix) {
-  std::vector<int64> dimensions(shape.rank());
+                                             tensorflow::StringPiece suffix) {
+  std::vector<int64> dimensions(ShapeUtil::Rank(shape));
   std::iota(dimensions.begin(), dimensions.end(), 0);
-  return IrArray::Index(AddLoopsForShapeOnDimensions(shape, dimensions, suffix),
-                        shape, index_type_);
+  return AddLoopsForShapeOnDimensions(shape, dimensions, suffix);
 }
 
-std::vector<llvm::Value*> ForLoopNest::AddLoopsForShapeOnDimensions(
-    const Shape& shape, absl::Span<const int64> dimensions,
-    absl::string_view suffix) {
-  std::vector<llvm::Value*> multi_index(shape.dimensions_size());
+IrArray::Index ForLoopNest::AddLoopsForShapeOnDimensions(
+    const Shape& shape, tensorflow::gtl::ArraySlice<int64> dimensions,
+    tensorflow::StringPiece suffix) {
+  llvm_ir::IrArray::Index index(shape.dimensions_size(), nullptr);
   for (int64 dimension : dimensions) {
     std::unique_ptr<llvm_ir::ForLoop> loop = AddLoop(
         /*start_index=*/0,
         /*end_index=*/shape.dimensions(dimension),
         /*suffix=*/
-        llvm_ir::IrName(suffix, absl::StrCat(dimension)));
-    multi_index[dimension] = loop->GetIndVarValue();
+        llvm_ir::IrName(suffix, tensorflow::strings::StrCat(dimension)));
+    index[dimension] = loop->GetIndVarValue();
   }
-  return multi_index;
-}
-
-std::vector<llvm::Value*> ForLoopNest::EmitOperandArrayLoopNest(
-    const llvm_ir::IrArray& operand_array, int64 dimension_to_skip,
-    absl::string_view name_suffix) {
-  // Prepares the dimension list we will use to emit the loop nest. Outermost
-  // loops are added first. Add loops in major-to-minor order, and skip the
-  // 'dimension_to_skip' dimension.
-  std::vector<int64> dimensions;
-  const Shape& shape = operand_array.GetShape();
-  // Initially get the dimensions in minor to major order, then reverse them.
-  for (int64 dimension : LayoutUtil::MinorToMajor(shape)) {
-    if (dimension != dimension_to_skip) {
-      dimensions.push_back(dimension);
-    }
-  }
-  absl::c_reverse(dimensions);
-
-  // Create loop nest with one for-loop for each dimension of the
-  // output.
-  std::vector<llvm::Value*> multi_index =
-      AddLoopsForShapeOnDimensions(shape, dimensions, name_suffix);
-  // Verify every dimension except the 'dimension_to_skip' dimension was set in
-  // the index.
-  for (size_t dimension = 0; dimension < multi_index.size(); ++dimension) {
-    if (dimension == dimension_to_skip) {
-      DCHECK_EQ(nullptr, multi_index[dimension]);
-    } else {
-      DCHECK_NE(nullptr, multi_index[dimension]);
-    }
-  }
-  return multi_index;
+  return index;
 }
 
 }  // namespace llvm_ir

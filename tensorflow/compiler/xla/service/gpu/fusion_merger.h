@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_
-#define TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_
+#ifndef THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_
+#define THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_
 
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/service/hlo_pass_interface.h"
@@ -32,14 +32,16 @@ namespace gpu {
 // 2) The result of merging the fusion instruction into its users would not
 //    increase bytes transferred.
 //
-class FusionMerger : public HloModulePass {
+class FusionMerger : public HloPassInterface {
  public:
-  absl::string_view name() const override { return "fusion_merger"; }
+  tensorflow::StringPiece name() const override { return "fusion merger"; }
 
   StatusOr<bool> Run(HloModule* module) override;
+
+  static double GetThresholdFlopsToBytesRatio() { return 1.0; }
 };
 
 }  // namespace gpu
 }  // namespace xla
 
-#endif  // TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_
+#endif  // THIRD_PARTY_TENSORFLOW_COMPILER_XLA_SERVICE_GPU_FUSION_MERGER_H_

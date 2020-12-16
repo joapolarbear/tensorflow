@@ -1,6 +1,12 @@
 # Description:
 # BigQueryReader implementation
 
+package(
+    default_visibility = ["//visibility:private"],
+)
+
+licenses(["notice"])  # Apache 2.0
+
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
@@ -10,13 +16,22 @@ load(
 
 # For platform specific build config
 load(
-    "//tensorflow/core/platform:default/build_config.bzl",
+    "//tensorflow/core:platform/default/build_config.bzl",
     "tf_proto_library",
 )
 
-package(
-    default_visibility = ["//visibility:private"],
-    licenses = ["notice"],  # Apache 2.0
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        include = [
+            "**/*",
+        ],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )
 
 tf_kernel_library(
@@ -26,6 +41,7 @@ tf_kernel_library(
     deps = [
         ":bigquery_table_accessor",
         ":bigquery_table_partition_proto_cc",
+        "//tensorflow/contrib/cloud:bigquery_reader_ops_op_lib",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
         "//tensorflow/core:reader_base",
@@ -57,7 +73,6 @@ tf_cc_test(
     ],
     deps = [
         ":bigquery_table_accessor",
-        "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
@@ -70,18 +85,4 @@ tf_proto_library(
     name = "bigquery_table_partition_proto",
     srcs = ["bigquery_table_partition.proto"],
     cc_api_version = 2,
-)
-
-tf_kernel_library(
-    name = "gcs_config_ops",
-    srcs = ["gcs_config_ops.cc"],
-    visibility = ["//tensorflow:internal"],
-    deps = [
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-        "//tensorflow/core/platform/cloud:curl_http_request",
-        "//tensorflow/core/platform/cloud:gcs_file_system",
-        "//tensorflow/core/platform/cloud:oauth_client",
-        "@jsoncpp_git//:jsoncpp",
-    ],
 )

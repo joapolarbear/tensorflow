@@ -14,17 +14,12 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/core/kernels/conditional_accumulator_base.h"
-#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
 
 ConditionalAccumulatorBase::ConditionalAccumulatorBase(
-    const DataType& dtype, const PartialTensorShape& shape, const string& name,
-    const string& reduction_type)
-    : dtype_(dtype),
-      shape_(shape),
-      name_(name),
-      reduction_type_(reduction_type) {
+    const DataType& dtype, const PartialTensorShape& shape, const string& name)
+    : dtype_(dtype), shape_(shape), name_(name) {
   counter_ = 0;
   current_global_step_ = 0;
 }
@@ -195,9 +190,7 @@ bool ConditionalAccumulatorBase::TakeGradLockedHelper(OpKernelContext* ctx,
   current_global_step_++;
 
   // Average the accumulated gradient
-  if (reduction_type_ == "MEAN") {
-    DivideAccumGradByCounter(ctx);
-  }
+  DivideAccumGradByCounter(ctx);
 
   // Set output for accumulated gradient tensor
   bool successful_set_output = SetOutput(ctx);

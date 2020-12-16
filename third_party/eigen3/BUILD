@@ -11,30 +11,32 @@ licenses([
 
 exports_files(["LICENSE"])
 
-load("//third_party/mkl:build_defs.bzl", "if_mkl")
+# INTEL_MKL start
+load("//tensorflow:tensorflow.bzl", "if_mkl")
 
-EIGEN3_THIRD_PARTY_HEADERS = [
-    "Eigen/Core",
-    "Eigen/LU",
-    "Eigen/Cholesky",
-    "Eigen/Eigenvalues",
-    "Eigen/QR",
-    "Eigen/SVD",
-    "unsupported/Eigen/MatrixFunctions",
-    "unsupported/Eigen/SpecialFunctions",
-    "unsupported/Eigen/CXX11/ThreadPool",
-    "unsupported/Eigen/CXX11/Tensor",
-    "unsupported/Eigen/CXX11/FixedPoint",
-] + glob(["unsupported/Eigen/CXX11/src/FixedPoint/*.h"])
+# INTEL_MKL end
+load("//tensorflow:tensorflow.bzl", "if_mkl")
 
 cc_library(
     name = "eigen3",
-    hdrs = EIGEN3_THIRD_PARTY_HEADERS,
+    hdrs = glob(["unsupported/Eigen/CXX11/src/FixedPoint/*.h"]) + [
+        "Eigen/Core",
+        "Eigen/LU",
+        "Eigen/Cholesky",
+        "Eigen/Eigenvalues",
+        "Eigen/QR",
+        "Eigen/SVD",
+        "unsupported/Eigen/MatrixFunctions",
+        "unsupported/Eigen/SpecialFunctions",
+        "unsupported/Eigen/CXX11/ThreadPool",
+        "unsupported/Eigen/CXX11/Tensor",
+        "unsupported/Eigen/CXX11/FixedPoint",
+    ],
     includes = if_mkl(["./mkl_include"]),
     visibility = ["//visibility:public"],
     deps = [
         "@eigen_archive//:eigen",
-        "@local_config_sycl//sycl",
+        "@local_config_sycl//sycl:sycl",
     ],
 )
 
@@ -45,30 +47,4 @@ filegroup(
         exclude = ["**/OWNERS"],
     ),
     visibility = ["//tensorflow:__subpackages__"],
-)
-
-filegroup(
-    name = "eigen_third_party_header_files",
-    srcs = EIGEN3_THIRD_PARTY_HEADERS,
-    visibility = ["//visibility:public"],
-)
-
-genrule(
-    name = "install_eigen_headers",
-    srcs = [
-        "@eigen_archive//:eigen_header_files",
-        ":eigen_third_party_header_files",
-    ],
-    outs = ["include"],
-    cmd = """
-    mkdir $@
-    for f in $(SRCS); do
-      d="$${f%/*}"
-      d="$${d#*external/eigen_archive/}"
-
-      mkdir -p "$@/$${d}"
-      cp "$${f}" "$@/$${d}/"
-    done
-    """,
-    tags = ["manual"],
 )

@@ -18,24 +18,22 @@ limitations under the License.
 
 #ifdef TENSORFLOW_USE_MPI
 
-#include <list>
-#include <map>
-#include <memory>
 #include <queue>
-#include <string>
 #include <thread>
+#include <list>
+#include <string>
+#include <memory>
+#include <map>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <iostream>
 
-#include "tensorflow/contrib/mpi/mpi_msg.pb.h"
 #include "tensorflow/contrib/mpi/mpi_utils.h"
 #include "tensorflow/core/distributed_runtime/base_rendezvous_mgr.h"
-#include "tensorflow/core/distributed_runtime/recent_request_ids.h"
-#include "tensorflow/core/distributed_runtime/request_id.h"
 #include "tensorflow/core/distributed_runtime/worker_env.h"
+#include "tensorflow/contrib/mpi/mpi_msg.pb.h"
 #include "tensorflow/core/protobuf/worker.pb.h"
 
 #define TAG_REQTENSOR 1010
@@ -71,7 +69,7 @@ class MPISendTensorCall {
 
   void Init(const Rendezvous::ParsedKey& parsed, const int64 step_id,
             const bool is_dead) {
-    mRes_.set_key(string(parsed.FullKey()));
+    mRes_.set_key(parsed.FullKey().ToString());
     mRes_.set_step_id(step_id);
     mRes_.mutable_response()->set_is_dead(is_dead);
     mRes_.mutable_response()->set_send_start_micros(
@@ -106,7 +104,6 @@ class MPIRequestTensorCall {
   void Init(const Rendezvous::ParsedKey& parsed, const int64 step_id) {
     req_.set_step_id(step_id);
     req_.set_rendezvous_key(parsed.FullKey().data(), parsed.FullKey().size());
-    req_.set_request_id(GetUniqueRequestId());
     request_buffer_size_ = req_.ByteSize();
     //   request_buffer_ = new char[request_buffer_size_];
     //  req_.SerializeToArray(request_buffer_, request_buffer_size_);
@@ -161,8 +158,7 @@ class MPIRendezvousMgr : public BaseRendezvousMgr {
  private:
   typedef std::function<MPISendTensorCall*(
       const Status&, const Rendezvous::Args&, const Rendezvous::Args&,
-      const Tensor&, const bool, MPISendTensorCall*)>
-      MPIRecvTensorCallBack;
+      const Tensor&, const bool, MPISendTensorCall*)> MPIRecvTensorCallBack;
 
   typedef std::pair<std::string, std::function<void()>> RequestQueueEntry;
   typedef std::pair<std::string, std::function<MPISendTensorCall*()>>
@@ -180,8 +176,6 @@ class MPIRendezvousMgr : public BaseRendezvousMgr {
   std::queue<RequestQueueEntry> request_queue_ GUARDED_BY(mrq_);
   std::map<std::string, std::shared_ptr<MPIRequestTensorCall>> recv_tensor_map_
       GUARDED_BY(mrq_);
-
-  RecentRequestIds recv_tensor_recent_request_ids_;
 
   void AddRequest(RecvTensorRequest, const int);
   void MPIBackgroundThread();

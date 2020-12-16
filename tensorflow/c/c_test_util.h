@@ -13,14 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_C_C_TEST_UTIL_H_
-#define TENSORFLOW_C_C_TEST_UTIL_H_
+#ifndef THIRD_PARTY_TENSORFLOW_C_C_TEST_UTIL_H_
+#define THIRD_PARTY_TENSORFLOW_C_C_TEST_UTIL_H_
 
 #include "tensorflow/c/c_api.h"
 
 #include <vector>
 #include "tensorflow/core/framework/attr_value.pb.h"
-#include "tensorflow/core/framework/function.pb.h"
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/framework/node_def.pb.h"
 #include "tensorflow/core/framework/types.pb.h"
@@ -30,8 +29,6 @@ using ::tensorflow::string;
 
 typedef std::unique_ptr<TF_Tensor, decltype(&TF_DeleteTensor)>
     unique_tensor_ptr;
-
-TF_Tensor* BoolTensor(int32_t v);
 
 // Create a tensor with values of type TF_INT8 provided by `values`.
 TF_Tensor* Int8Tensor(const int64_t* dims, int num_dims, const char* values);
@@ -47,26 +44,16 @@ TF_Tensor* Int32Tensor(int32_t v);
 
 TF_Tensor* DoubleTensor(double v);
 
-TF_Tensor* FloatTensor(float v);
-
 TF_Operation* Placeholder(TF_Graph* graph, TF_Status* s,
-                          const char* name = "feed",
-                          TF_DataType dtype = TF_INT32,
-                          const std::vector<int64_t>& dims = {});
+                          const char* name = "feed");
 
 TF_Operation* Const(TF_Tensor* t, TF_Graph* graph, TF_Status* s,
                     const char* name = "const");
-
-TF_Operation* ScalarConst(bool v, TF_Graph* graph, TF_Status* s,
-                          const char* name = "scalar");
 
 TF_Operation* ScalarConst(int32_t v, TF_Graph* graph, TF_Status* s,
                           const char* name = "scalar");
 
 TF_Operation* ScalarConst(double v, TF_Graph* graph, TF_Status* s,
-                          const char* name = "scalar");
-
-TF_Operation* ScalarConst(float v, TF_Graph* graph, TF_Status* s,
                           const char* name = "scalar");
 
 TF_Operation* Add(TF_Operation* l, TF_Operation* r, TF_Graph* graph,
@@ -81,17 +68,6 @@ TF_Operation* AddWithCtrlDependency(TF_Operation* l, TF_Operation* r,
 
 TF_Operation* Add(TF_Output l, TF_Output r, TF_Graph* graph, TF_Status* s,
                   const char* name = "add");
-
-TF_Operation* Min(TF_Operation* l, TF_Operation* r, TF_Graph* graph,
-                  TF_Status* s, const char* name = "min");
-
-TF_Operation* Mul(TF_Operation* l, TF_Operation* r, TF_Graph* graph,
-                  TF_Status* s, const char* name = "mul");
-
-// If `op_device` is non-empty, set the created op on that device.
-TF_Operation* MinWithDevice(TF_Operation* l, TF_Operation* r, TF_Graph* graph,
-                            const string& op_device, TF_Status* s,
-                            const char* name = "min");
 
 TF_Operation* Neg(TF_Operation* n, TF_Graph* graph, TF_Status* s,
                   const char* name = "neg");
@@ -132,7 +108,7 @@ std::vector<string> GetFuncNames(const tensorflow::GraphDef& graph_def);
 
 class CSession {
  public:
-  CSession(TF_Graph* graph, TF_Status* s, bool use_XLA = false);
+  CSession(TF_Graph* graph, TF_Status* s);
   explicit CSession(TF_Session* session);
 
   ~CSession();
@@ -148,8 +124,6 @@ class CSession {
 
   TF_Tensor* output_tensor(int i) { return output_values_[i]; }
 
-  TF_Session* mutable_session() { return session_; }
-
  private:
   void DeleteInputValues();
   void ResetOutputValues();
@@ -162,4 +136,4 @@ class CSession {
   std::vector<TF_Operation*> targets_;
 };
 
-#endif  // TENSORFLOW_C_C_TEST_UTIL_H_
+#endif  // THIRD_PARTY_TENSORFLOW_C_C_TEST_UTIL_H_

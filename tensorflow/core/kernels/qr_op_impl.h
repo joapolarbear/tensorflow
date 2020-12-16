@@ -13,9 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_KERNELS_QR_OP_IMPL_H_
-#define TENSORFLOW_CORE_KERNELS_QR_OP_IMPL_H_
-
 // See docs in ../ops/linalg_ops.cc.
 //
 // This header file is used by the individual qr_*op*.cc files for registering
@@ -295,8 +292,6 @@ class QrOpGpu : public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(QrOpGpu);
 };
 
-#endif  // GOOGLE_CUDA
+#endif
 
 }  // namespace tensorflow
-
-#endif  // TENSORFLOW_CORE_KERNELS_QR_OP_IMPL_H_

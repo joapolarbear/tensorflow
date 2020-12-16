@@ -18,8 +18,6 @@ limitations under the License.
 #include <deque>
 
 #include "tensorflow/compiler/xla/service/call_graph.h"
-#include "tensorflow/compiler/xla/service/dfs_hlo_visitor_with_default.h"
-#include "tensorflow/compiler/xla/service/hlo_dce.h"
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace xla {
@@ -84,10 +82,6 @@ class SubcomputationInsertionVisitor : public DfsHloVisitorWithDefault {
     return outer_->ReplaceInstruction(call_, new_root);
   }
 
-  CallInliner::InlinedInstructionMap ConsumeInstructionMap() {
-    return std::move(subcomputation_hlo_to_new_hlo_);
-  }
-
  private:
   // Resolves the callee subcomputation_hlo to the new (inline) HLO in the
   // caller computation, or returns a NotFound error if that subcomputation HLO
@@ -97,7 +91,7 @@ class SubcomputationInsertionVisitor : public DfsHloVisitorWithDefault {
     if (it == subcomputation_hlo_to_new_hlo_.end()) {
       return NotFound(
           "Could not find mapping from subcomputation HLO %s to a cloned HLO.",
-          subcomputation_hlo->ToString());
+          subcomputation_hlo->ToString().c_str());
     }
     return it->second;
   }
@@ -118,13 +112,13 @@ class SubcomputationInsertionVisitor : public DfsHloVisitorWithDefault {
 
   HloInstruction* call_;
   HloComputation* outer_;
-  CallInliner::InlinedInstructionMap subcomputation_hlo_to_new_hlo_;
+  std::unordered_map<HloInstruction*, HloInstruction*>
+      subcomputation_hlo_to_new_hlo_;
 };
 
 }  // namespace
 
-/* static */ StatusOr<CallInliner::InlinedInstructionMap> CallInliner::Inline(
-    HloInstruction* call) {
+/* static */ Status CallInliner::Inline(HloInstruction* call) {
   TF_RET_CHECK(call->opcode() == HloOpcode::kCall)
       << "Instruction was not a call op: " << call->opcode();
   const auto& callees = call->called_computations();
@@ -132,8 +126,7 @@ class SubcomputationInsertionVisitor : public DfsHloVisitorWithDefault {
   HloComputation* callee = callees[0];
   // We visit the callee, cloning its body into its caller.
   SubcomputationInsertionVisitor visitor(call);
-  TF_RETURN_IF_ERROR(callee->Accept(&visitor));
-  return visitor.ConsumeInstructionMap();
+  return callee->Accept(&visitor);
 }
 
 StatusOr<bool> CallInliner::Run(HloModule* module) {
@@ -147,20 +140,12 @@ StatusOr<bool> CallInliner::Run(HloModule* module) {
           VLOG(1) << "Visiting callsite: " << callsite.ToString();
           if (callsite.instruction()->opcode() == HloOpcode::kCall) {
             HloInstruction* call = callsite.instruction();
-            TF_RETURN_IF_ERROR(Inline(call).status());
+            TF_RETURN_IF_ERROR(Inline(call));
             did_mutate = true;
           }
         }
         return Status::OK();
       }));
-  if (did_mutate) {
-    // Run DCE to remove called computations which are now becoming unused.
-    // This can result then in problems if within the called computation, there
-    // were send/recv instructions, which the module group verifier will flag as
-    // error findingthe same channel ID used for multiple send/recv
-    // instructions.
-    TF_RETURN_IF_ERROR(HloDCE().Run(module).status());
-  }
   return did_mutate;
 }
 

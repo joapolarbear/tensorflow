@@ -17,54 +17,40 @@ package org.tensorflow;
 
 import java.util.HashMap;
 import java.util.Map;
-
 import org.tensorflow.types.UInt8;
 
 /** Represents the type of elements in a {@link Tensor} as an enum. */
 public enum DataType {
   /** 32-bit single precision floating point. */
-  FLOAT(1, 4),
+  FLOAT(1),
 
   /** 64-bit double precision floating point. */
-  DOUBLE(2, 8),
+  DOUBLE(2),
 
   /** 32-bit signed integer. */
-  INT32(3, 4),
+  INT32(3),
 
   /** 8-bit unsigned integer. */
-  UINT8(4, 1),
+  UINT8(4),
 
   /**
    * A sequence of bytes.
    *
    * <p>TensorFlow uses the STRING type for an arbitrary sequence of bytes.
    */
-  STRING(7, -1),
+  STRING(7),
 
   /** 64-bit signed integer. */
-  INT64(9, 8),
+  INT64(9),
 
   /** Boolean. */
-  BOOL(10, 1);
+  BOOL(10);
 
   private final int value;
-  
-  private final int byteSize;
 
-  /**
-   * @param value must match the corresponding TF_* value in the TensorFlow C API.
-   * @param byteSize size of an element of this type, in bytes, -1 if unknown
-   */
-  DataType(int value, int byteSize) {
+  // The integer value must match the corresponding TF_* value in the TensorFlow C API.
+  DataType(int value) {
     this.value = value;
-    this.byteSize = byteSize;
-  }
-
-  /**
-   * Returns the size of an element of this type, in bytes, or -1 if element size is variable.
-   */
-  public int byteSize() {
-    return byteSize;
   }
 
   /** Corresponding value of the TF_DataType enum in the TensorFlow C API. */

@@ -14,9 +14,9 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/compiler/tf2xla/sharding_util.h"
 
-#include "absl/strings/match.h"
 #include "tensorflow/core/framework/node_def.pb.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/util/device_name_utils.h"
 
 namespace tensorflow {
@@ -26,10 +26,10 @@ const char kShardingAttribute[] = "_XlaSharding";
 }  // namespace
 
 namespace {
-xla::StatusOr<absl::optional<xla::OpSharding>> GetShardingFromNodeDef(
-    const NodeDef& node_def) {
+xla::StatusOr<tensorflow::gtl::optional<xla::OpSharding>>
+GetShardingFromNodeDef(const NodeDef& node_def) {
   if (!HasNodeAttr(node_def, kShardingAttribute)) {
-    return absl::optional<xla::OpSharding>();
+    return tensorflow::gtl::optional<xla::OpSharding>();
   }
   string value;
   xla::OpSharding sharding;
@@ -39,7 +39,7 @@ xla::StatusOr<absl::optional<xla::OpSharding>> GetShardingFromNodeDef(
         "Experimental _XlaSharding attribute was not a valid encoded "
         "xla::OpSharding proto.");
   }
-  return absl::optional<xla::OpSharding>(sharding);
+  return tensorflow::gtl::optional<xla::OpSharding>(sharding);
 }
 
 Status CoreOutOfRangeError(int core, int num_cores_per_replica) {
@@ -49,11 +49,12 @@ Status CoreOutOfRangeError(int core, int num_cores_per_replica) {
 }
 }  // namespace
 
-xla::StatusOr<absl::optional<xla::OpSharding>> ParseShardingFromDevice(
+xla::StatusOr<tensorflow::gtl::optional<xla::OpSharding>>
+ParseShardingFromDevice(
     const string& device_name, int num_cores_per_replica,
-    absl::optional<xla::OpSharding> explicit_sharding) {
+    tensorflow::gtl::optional<xla::OpSharding> explicit_sharding) {
   if (device_name.empty()) {
-    return explicit_sharding;
+    return tensorflow::gtl::optional<xla::OpSharding>();
   }
   DeviceNameUtils::ParsedName parsed_device;
   if (!DeviceNameUtils::ParseFullName(device_name, &parsed_device)) {
@@ -64,34 +65,34 @@ xla::StatusOr<absl::optional<xla::OpSharding>> ParseShardingFromDevice(
   if (explicit_sharding.has_value()) {
     return explicit_sharding;
   } else if (!parsed_device.has_type || !parsed_device.has_id ||
-             !absl::StrContains(parsed_device.type,
-                                kDeviceSuffixReplicatedCore)) {
-    return absl::optional<xla::OpSharding>();
+             !StringPiece(parsed_device.type)
+                  .contains(kDeviceSuffixReplicatedCore)) {
+    return tensorflow::gtl::optional<xla::OpSharding>();
   } else {
     const int core = parsed_device.id;
     if (core < 0 || core >= num_cores_per_replica) {
       return CoreOutOfRangeError(core, num_cores_per_replica);
     }
-    return absl::optional<xla::OpSharding>(
-        xla::sharding_builder::AssignDevice(core));
+    return tensorflow::gtl::optional<xla::OpSharding>(
+        xla::ShardingBuilder::AssignDevice(core));
   }
 }
 
-xla::StatusOr<absl::optional<xla::OpSharding>> ParseShardingFromDevice(
-    const NodeDef& node_def, int num_cores_per_replica) {
+xla::StatusOr<tensorflow::gtl::optional<xla::OpSharding>>
+ParseShardingFromDevice(const NodeDef& node_def, int num_cores_per_replica) {
   const string& device_name = node_def.device();
-  TF_ASSIGN_OR_RETURN(absl::optional<xla::OpSharding> sharding,
+  TF_ASSIGN_OR_RETURN(tensorflow::gtl::optional<xla::OpSharding> sharding,
                       GetShardingFromNodeDef(node_def));
   return ParseShardingFromDevice(device_name, num_cores_per_replica, sharding);
 }
 
-xla::StatusOr<absl::optional<xla::OpSharding>> ParseShardingFromDevice(
-    const Node& node, int num_cores_per_replica) {
+xla::StatusOr<tensorflow::gtl::optional<xla::OpSharding>>
+ParseShardingFromDevice(const Node& node, int num_cores_per_replica) {
   string device_name = node.assigned_device_name();
   if (device_name.empty()) {
     device_name = node.requested_device();
   }
-  TF_ASSIGN_OR_RETURN(absl::optional<xla::OpSharding> sharding,
+  TF_ASSIGN_OR_RETURN(tensorflow::gtl::optional<xla::OpSharding> sharding,
                       GetShardingFromNodeDef(node.def()));
   return ParseShardingFromDevice(device_name, num_cores_per_replica, sharding);
 }

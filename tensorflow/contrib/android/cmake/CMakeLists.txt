@@ -75,6 +75,7 @@ target_link_libraries(tensorflow_inference
 include_directories(
     ${PREBUILT_DIR}/proto
     ${PREBUILT_DIR}/protobuf/include
+    ${PREBUILT_DIR}/nsync/public
     ${TENSORFLOW_ROOT_DIR}/tensorflow/contrib/makefile/downloads/eigen
     ${TENSORFLOW_ROOT_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..)

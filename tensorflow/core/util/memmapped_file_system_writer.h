@@ -40,7 +40,7 @@ class MemmappedFileSystemWriter {
 
  private:
   Status AdjustAlignment(uint64 alignment);
-  void AddToDirectoryElement(const string& element_name, uint64 length);
+  void AddToDirectoryElement(const string& element_name);
   MemmappedFileSystemDirectory directory_;
   // The current offset in the file, to support alignment.
   uint64 output_file_offset_ = 0;

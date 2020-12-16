@@ -245,11 +245,11 @@ class EventListenerTestServicer(grpc_debug_server.EventListenerBaseServicer):
     self._origin_id_to_strings = []
     self._graph_tracebacks = []
     self._graph_versions = []
-    self._source_files = []
+    self._source_files = None
 
   def _initialize_toggle_watch_state(self, toggle_watches):
     self._toggle_watches = toggle_watches
-    self._toggle_watch_state = {}
+    self._toggle_watch_state = dict()
     if self._toggle_watches:
       for watch_key in self._toggle_watches:
         self._toggle_watch_state[watch_key] = False
@@ -274,7 +274,7 @@ class EventListenerTestServicer(grpc_debug_server.EventListenerBaseServicer):
     self._origin_id_to_strings = []
     self._graph_tracebacks = []
     self._graph_versions = []
-    self._source_files = []
+    self._source_files = None
 
   def SendTracebacks(self, request, context):
     self._call_types.append(request.call_type)
@@ -286,7 +286,7 @@ class EventListenerTestServicer(grpc_debug_server.EventListenerBaseServicer):
     return debug_service_pb2.EventReply()
 
   def SendSourceFiles(self, request, context):
-    self._source_files.append(request)
+    self._source_files = request
     return debug_service_pb2.EventReply()
 
   def query_op_traceback(self, op_name):
@@ -310,7 +310,7 @@ class EventListenerTestServicer(grpc_debug_server.EventListenerBaseServicer):
                                              op_log_proto.id_to_string)
     raise ValueError(
         "Op '%s' does not exist in the tracebacks received by the debug "
-        "server." % op_name)
+        "server.")
 
   def query_origin_stack(self):
     """Query the stack of the origin of the execution call.
@@ -348,13 +348,9 @@ class EventListenerTestServicer(grpc_debug_server.EventListenerBaseServicer):
     Raises:
       ValueError: If no source file is found at the given file_path.
     """
-    if not self._source_files:
-      raise ValueError(
-          "This debug server has not received any source file contents yet.")
-    for source_files in self._source_files:
-      for source_file_proto in source_files.source_files:
-        if source_file_proto.file_path == file_path:
-          return source_file_proto.lines[lineno - 1]
+    for source_file_proto in self._source_files.source_files:
+      if source_file_proto.file_path == file_path:
+        return source_file_proto.lines[lineno - 1]
     raise ValueError(
         "Source file at path %s has not been received by the debug server",
         file_path)

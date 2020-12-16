@@ -32,7 +32,9 @@ limitations under the License.
 #include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
-namespace ops {
+
+using namespace ops;  // NOLINT(build/namespaces)
+
 namespace {
 
 void TestMul(const std::vector<int64>& x_shape,
@@ -182,18 +184,19 @@ void TimeMul(const std::vector<int64>& x_shape,
             << ", total_duration=" << total_duration;
 }
 
+}  // namespace
+
 void TestManualScalar() {
   TestMul(
       {10}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f}, 0.0f,
       10.0f, {1}, {10.0f}, -100.0f, 100.0f, {10},
       {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f},
       3.0f);
-  TestMul(
-      {1}, {10.0f}, -100.0f, 100.0f, {10},
-      {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f}, 0.0f,
-      10.0f, {10},
-      {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f},
-      3.0f);
+  TestMul({1}, {10.0f}, -100.0f, 100.0f, {10},
+          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f}, 0.0f,
+          10.0f, {10}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f,
+                        90.0f, 100.0f},
+          3.0f);
 }
 
 void TestScalar() {
@@ -273,12 +276,10 @@ void BenchmarkVectorTimesTensor() {
   TimeMul({100000, 100}, {100}, 100);
 }
 
-}  // namespace
-}  // namespace ops
-}  // namespace tensorflow
+}  // end namespace tensorflow
 
 #define RUN_TEST(t) \
-  TEST(QuantizedAddOpTest, t) { tensorflow::ops::t(); }
+  TEST(QuantizedAddOpTest, t) { tensorflow::t(); }
 
 RUN_TEST(TestManualScalar);
 RUN_TEST(TestManualVector);

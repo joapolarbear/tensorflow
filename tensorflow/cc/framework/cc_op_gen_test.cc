@@ -19,12 +19,15 @@ limitations under the License.
 #include "tensorflow/core/framework/op_gen_lib.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/lib/io/path.h"
-#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
 namespace {
 
+// TODO(annarev): Remove this op_gen_overrides.pbtxt reference.
+// It is needed only because WriteCCOps takes it as an argument.
+constexpr char kOverridesFnames[] =
+    "tensorflow/cc/ops/op_gen_overrides.pbtxt";
 constexpr char kBaseOpDef[] = R"(
 op {
   name: "Foo"
@@ -62,12 +65,12 @@ op {
 )";
 
 void ExpectHasSubstr(StringPiece s, StringPiece expected) {
-  EXPECT_TRUE(absl::StrContains(s, expected))
+  EXPECT_TRUE(s.contains(expected))
       << "'" << s << "' does not contain '" << expected << "'";
 }
 
 void ExpectDoesNotHaveSubstr(StringPiece s, StringPiece expected) {
-  EXPECT_FALSE(absl::StrContains(s, expected))
+  EXPECT_FALSE(s.contains(expected))
       << "'" << s << "' contains '" << expected << "'";
 }
 
@@ -93,7 +96,7 @@ void GenerateCcOpFiles(Env* env, const OpList& ops,
   const auto internal_h_file_path = io::JoinPath(tmpdir, "test_internal.h");
   const auto internal_cc_file_path = io::JoinPath(tmpdir, "test_internal.cc");
 
-  WriteCCOps(ops, api_def_map, h_file_path, cc_file_path);
+  WriteCCOps(ops, api_def_map, h_file_path, cc_file_path, kOverridesFnames);
 
   TF_ASSERT_OK(ReadFileToString(env, h_file_path, h_file_text));
   TF_ASSERT_OK(

@@ -19,14 +19,12 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.python import pywrap_tensorflow as tf_wrap
+from tensorflow.python.framework import errors
 from tensorflow.python.grappler import cluster as gcluster
 from tensorflow.python.grappler import item as gitem
 
 
-def GenerateCostReport(metagraph,
-                       per_node_report=False,
-                       verbose=False,
-                       cluster=None):
+def GenerateCostReport(metagraph, per_node_report=False, cluster=None):
   """Analyze the cost of each TensorFlow op and node in the provided metagraph.
 
   Args:
@@ -34,7 +32,6 @@ def GenerateCostReport(metagraph,
     per_node_report: by default the report contains stats aggregated on a per op
       type basis, setting per_node_report to True adds results for each
       individual node to the report.
-    verbose: Prints out the entire operation proto instead of a summary table.
     cluster: Analyze the costs using the specified cluster, or the local machine
       if no cluster was specified.
 
@@ -44,9 +41,9 @@ def GenerateCostReport(metagraph,
   if cluster is None:
     cluster = gcluster.Cluster(disable_detailed_stats=False)
 
-  ret_from_swig = tf_wrap.GenerateCostReport(metagraph.SerializeToString(),
-                                             per_node_report, verbose,
-                                             cluster.tf_cluster)
+  with errors.raise_exception_on_not_ok_status():
+    ret_from_swig = tf_wrap.GenerateCostReport(
+        metagraph.SerializeToString(), per_node_report, cluster.tf_cluster)
   return ret_from_swig
 
 
