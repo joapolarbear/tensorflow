@@ -1184,6 +1184,30 @@ Status AutoMixedPrecisionImpl::Optimize() {
   TF_RETURN_IF_ERROR(ValidateLists(fp16_whitelist_, fp16_blacklist_,
                                    fp16_graylist_, fp16_clearlist_));
 
+  string filename, line;
+  TF_RETURN_IF_ERROR(ReadStringFromEnvVar(
+      "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_PRIORLIST_FILE", "", &filename));
+  VLOG(2) << "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_PRIORLIST_FILE: " << filename;
+  if (filename != "") {
+    std::ifstream file_;
+    file_.open(filename, std::ios::in);
+    VLOG(2) << "Force to convert fp16 by names, files: " << filename;
+    if (file_.is_open()) {
+      while (getline(file_, line)) {
+        VLOG(2) << "Force to convert fp16 by names: " << line;
+        if (!line.empty()) {
+          fp16_priorlist_.insert(line);
+        }
+      }
+      file_.close();
+    }
+  }
+
+  VLOG(2) << "Priorlist";
+  for (auto op : fp16_priorlist_) {
+    VLOG(2) << " -- " << op;
+  }
+
   size_t timestamp = Env::Default()->NowMicros() / 1000;
   TF_RETURN_IF_ERROR(PrintDebugLogs(/* preop = */ true, timestamp));
 
