@@ -1184,6 +1184,7 @@ Status AutoMixedPrecisionImpl::Optimize() {
   TF_RETURN_IF_ERROR(ValidateLists(fp16_whitelist_, fp16_blacklist_,
                                    fp16_graylist_, fp16_clearlist_));
 
+  // Read ops forced to quantize
   string filename, line;
   TF_RETURN_IF_ERROR(ReadStringFromEnvVar(
       "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_PRIORLIST_FILE", "", &filename));
@@ -1202,10 +1203,14 @@ Status AutoMixedPrecisionImpl::Optimize() {
       file_.close();
     }
   }
-
-  VLOG(2) << "Priorlist";
-  for (auto op : fp16_priorlist_) {
-    VLOG(2) << " -- " << op;
+  
+  // Apply prior_list
+  if (!fp16_priorlist_.empty()) {
+    VLOG(2) << "Apply prior_list";
+    for (auto op : fp16_priorlist_) {
+      VLOG(2) << " -- " << op;
+    }
+    white_set = prior_set;
   }
 
   size_t timestamp = Env::Default()->NowMicros() / 1000;
@@ -1324,18 +1329,6 @@ Status AutoMixedPrecisionImpl::Optimize() {
 
   VLOG(2) << "Finding existing casts that can be made white";
   MakeCastsWhiteIfAllOutputsWhite(&white_set);
-    
-  // Apply prior_list
-  VLOG(2) << "Only keep ops in the intersection of prior_set and whitelist if prior_set is not empty";
-  if (!fp16_priorlist_.empty()) {
-    for (const auto& elem: prior_set) {
-      if (white_set.count(elem)) {
-        intersection_set.insert(elem);
-      }
-    }
-    white_set = intersection_set;
-  }
-
   VLOG(2) << "Beginning final pass to change type attributes and insert Cast "
              "ops at paint boundaries";
   TF_RETURN_IF_ERROR(ChangeTypeAttrsAndAddCasts(white_set));

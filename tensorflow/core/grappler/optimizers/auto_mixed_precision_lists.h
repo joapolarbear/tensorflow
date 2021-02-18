@@ -90,6 +90,15 @@ class AutoMixedPrecisionLists {
     if (IsPseudoFastMath()) {
       return gtl::FlatSet<string>{};
     }
+
+    bool force_flag;
+    const Status status =
+        ReadBoolFromEnvVar("TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_FORCE",
+                           false, &force_flag);
+    if (force_flag) {
+      return gtl::FlatSet<string>{};
+    }
+
     string to_add, to_remove;
     TF_CHECK_OK(ReadStringFromEnvVar(
         "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_GRAYLIST_ADD", "", &to_add));
@@ -145,6 +154,14 @@ class AutoMixedPrecisionLists {
     if (IsPseudoFastMath()) {
       return gtl::FlatSet<string>{};
     }
+
+    bool force_flag;
+    const Status status = ReadBoolFromEnvVar(
+        "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_FORCE", false, &force_flag);
+    if (force_flag) {
+      return gtl::FlatSet<string>{};
+    }
+    
     string to_add, to_remove;
     TF_CHECK_OK(ReadStringFromEnvVar(
         "TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_BLACKLIST_ADD", "", &to_add));
