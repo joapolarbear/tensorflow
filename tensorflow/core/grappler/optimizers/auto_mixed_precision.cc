@@ -1203,15 +1203,6 @@ Status AutoMixedPrecisionImpl::Optimize() {
       file_.close();
     }
   }
-  
-  // Apply prior_list
-  if (!fp16_priorlist_.empty()) {
-    VLOG(2) << "Apply prior_list";
-    for (auto op : fp16_priorlist_) {
-      VLOG(2) << " -- " << op;
-    }
-    white_set = prior_set;
-  }
 
   size_t timestamp = Env::Default()->NowMicros() / 1000;
   TF_RETURN_IF_ERROR(PrintDebugLogs(/* preop = */ true, timestamp));
@@ -1294,6 +1285,15 @@ Status AutoMixedPrecisionImpl::Optimize() {
   VLOG(2) << "Beginning pass 1 to add whitelist ops";
   AddWhitelistOps(&white_set, &prior_set);
   VLOG(2) << "Finished pass 1";
+
+  // Apply prior_list
+  if (!fp16_priorlist_.empty()) {
+    VLOG(2) << "Apply prior_list";
+    for (auto op : fp16_priorlist_) {
+      VLOG(2) << " -- " << op;
+    }
+    white_set = prior_set;
+  }
 
   if (white_set.empty()) {
     LOG(INFO) << "No whitelist ops found, nothing to do";
